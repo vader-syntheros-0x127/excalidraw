@@ -70,6 +70,15 @@
         }
 
         function getTheme() {
+          // STRL: one-time migration — flip existing visitors to dark once.
+          // The version flag ensures it runs only once, so users can still
+          // switch to light afterward and have that choice persist.
+          var STRL_THEME_MIGRATION_KEY = "strl-theme-dark-default-v1";
+          if (!window.localStorage.getItem(STRL_THEME_MIGRATION_KEY)) {
+            window.localStorage.setItem(STRL_THEME_MIGRATION_KEY, "1");
+            window.localStorage.setItem("excalidraw-theme", "dark");
+          }
+
           const theme = window.localStorage.getItem("excalidraw-theme");
 
           if (theme && theme === "system") {
