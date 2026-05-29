@@ -27,3 +27,7 @@ dev-dist
 html
 meta*.json
 .claude
+
+# STRL desktop build artifacts
+desktop/renderer
+desktop/dist-installers

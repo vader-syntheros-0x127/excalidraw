@@ -1,0 +1,47 @@
+# STRL-Ideate desktop packaging (electron-builder).
+# The renderer (built SPA) is copied to ./renderer by `yarn build:renderer`
+# before packaging and bundled alongside the compiled main process.
+appId: com.strl.ideate
+productName: STRL-Ideate
+copyright: STRL
+
+# asar disabled for now so the app:// protocol can read renderer files
+# straight off disk (simpler than asar-aware fetch); revisit for size later.
+asar: false
+
+directories:
+  output: dist-installers
+  buildResources: assets
+
+files:
+  - "dist/**/*"
+  - "package.json"
+  - "renderer/**/*"
+
+# .excalidraw file association (OS-level).
+fileAssociations:
+  - ext: excalidraw
+    name: STRL-Ideate scene
+    role: Editor
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Graphics
+  maintainer: STRL <revan@secarclabs.com>
+  icon: assets/icon.png
+  synopsis: Virtual hand-drawn style whiteboard
+  description: STRL-Ideate — a local-first whiteboard for sketching diagrams.
+
+# Placeholders for later phases (signing/notarization done in CI):
+win:
+  target:
+    - nsis
+  icon: assets/icon.png
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.graphics-design
+  icon: assets/icon.png

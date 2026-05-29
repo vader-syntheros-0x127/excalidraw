@@ -3,13 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "description": "STRL-Ideate desktop application (Electron shell around excalidraw-app)",
+  "author": "STRL <revan@secarclabs.com>",
+  "homepage": "https://github.com/vader-syntheros-0x127/excalidraw",
   "main": "dist/main.js",
   "scripts": {
     "build:main": "tsc -p tsconfig.json",
+    "build:renderer": "yarn --cwd ../excalidraw-app build:desktop && node -e \"const fs=require('fs');fs.rmSync('renderer',{recursive:true,force:true});fs.cpSync('../excalidraw-app/build','renderer',{recursive:true})\"",
+    "prepackage": "yarn build:main && yarn build:renderer",
+    "dist:linux": "yarn prepackage && electron-builder --linux",
+    "dist:win": "yarn prepackage && electron-builder --win",
+    "dist:mac": "yarn prepackage && electron-builder --mac",
     "start": "yarn build:main && electron .",
     "start:dev": "cross-env STRL_DESKTOP_DEV_URL=http://localhost:3000 electron ."
   },
   "devDependencies": {
-    "electron": "42.3.0"
+    "electron": "42.3.0",
+    "electron-builder": "26.8.1"
   }
 }

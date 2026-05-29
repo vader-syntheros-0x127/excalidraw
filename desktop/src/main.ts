@@ -1,7 +1,6 @@
 // STRL-Ideate desktop — Electron main process.
 // Wraps the built excalidraw-app SPA in a desktop window, served over a
 // custom `app://` protocol so the app keeps its absolute (`/`) asset paths.
-import { strict as assert } from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -23,8 +22,12 @@ const APP_NAME = "STRL-Ideate";
 const APP_SCHEME = "app";
 // When set (dev), load the live Vite dev server instead of the built files.
 const DEV_URL = process.env.STRL_DESKTOP_DEV_URL;
-// Built SPA: desktop/dist/main.js -> ../../excalidraw-app/build
-const BUILD_DIR = path.resolve(__dirname, "..", "..", "excalidraw-app", "build");
+// Built SPA location:
+//  - packaged: bundled next to dist/ as `renderer/` (see electron-builder.yml)
+//  - dev:      the workspace build at excalidraw-app/build
+const BUILD_DIR = app.isPackaged
+  ? path.join(__dirname, "..", "renderer")
+  : path.resolve(__dirname, "..", "..", "excalidraw-app", "build");
 
 app.setName(APP_NAME);
 
@@ -156,12 +159,26 @@ const createWindow = () => {
   mainWindow.webContents.on("did-finish-load", async () => {
     console.log(`[strl-desktop] renderer loaded (electron ${process.versions.electron})`);
     flushPendingOpen();
-    // Headless smoke check (STRL_SMOKE=1): verify the editor mounted, then quit.
+    // Headless smoke check (STRL_SMOKE=1): poll for the editor to mount
+    // (React mounts after load), capturing console errors for diagnosis.
     if (process.env.STRL_SMOKE === "1" && mainWindow) {
+      const wc = mainWindow.webContents;
+      wc.on("console-message", (_e, level, message) => {
+        if (level >= 2) {
+          console.log(`[strl-desktop] console[${level}]: ${message}`);
+        }
+      });
+      let probe: any = null;
       try {
-        const probe = await mainWindow.webContents.executeJavaScript(
-          `({ title: document.title, hasEditor: !!document.querySelector('.excalidraw'), dark: document.documentElement.classList.contains('dark') })`,
-        );
+        for (let i = 0; i < 20; i++) {
+          probe = await wc.executeJavaScript(
+            `({ title: document.title, hasEditor: !!document.querySelector('.excalidraw'), dark: document.documentElement.classList.contains('dark'), scripts: document.querySelectorAll('script[type=module]').length })`,
+          );
+          if (probe.hasEditor) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
         console.log(`[strl-desktop] smoke: ${JSON.stringify(probe)}`);
       } catch (error) {
         console.error(`[strl-desktop] smoke probe failed: ${String(error)}`);
@@ -408,5 +425,3 @@ app.on("web-contents-created", (_event, contents) => {
     }
   });
 });
-
-assert(BUILD_DIR.endsWith(path.join("excalidraw-app", "build")));
