@@ -120,7 +120,8 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
-      sourcemap: true,
+      // STRL: don't ship sourcemaps (avoid exposing source in shipped builds)
+      sourcemap: false,
       // don't auto-inline small assets (i.e. fonts hosted on CDN)
       assetsInlineLimit: 0,
     },
