@@ -1,0 +1,58 @@
+// STRL: styling for the prominent export button. Uses Excalidraw's theme
+// CSS variables so it adapts to light/dark automatically (with fallbacks).
+.strl-export {
+  position: relative;
+
+  &__trigger {
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border-radius: var(--border-radius-lg, 0.5rem);
+    border: 1px solid var(--default-border-color, #d6d6d6);
+    background-color: var(--island-bg-color, #ffffff);
+    color: var(--text-primary-color, #1b1b1f);
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--button-hover-bg, rgba(0, 0, 0, 0.06));
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+
+  &__menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    min-width: 9.5rem;
+    padding: 0.25rem;
+    border-radius: var(--border-radius-lg, 0.5rem);
+    border: 1px solid var(--default-border-color, #d6d6d6);
+    background-color: var(--island-bg-color, #ffffff);
+    box-shadow: var(--shadow-island, 0 2px 8px rgba(0, 0, 0, 0.25));
+
+    button {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border: none;
+      border-radius: var(--border-radius-md, 0.375rem);
+      background: transparent;
+      color: var(--text-primary-color, #1b1b1f);
+      font-family: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
+
+      &:hover {
+        background-color: var(--button-hover-bg, rgba(0, 0, 0, 0.06));
+      }
+    }
+  }
+}
