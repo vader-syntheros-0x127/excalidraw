@@ -127,6 +127,7 @@ import { isBrowserStorageStateNewer } from "./data/tabSync";
 import { ShareDialog, shareDialogStateAtom } from "./share/ShareDialog";
 import CollabError, { collabErrorIndicatorAtom } from "./collab/CollabError";
 import { useHandleAppTheme } from "./useHandleAppTheme";
+import { useDesktopIntegration } from "./useDesktopIntegration";
 import { getPreferredLanguage } from "./app-language/language-detector";
 import { useAppLangCode } from "./app-language/language-state";
 import DebugCanvas, {
@@ -368,6 +369,9 @@ const ExcalidrawWrapper = () => {
   const isCollabDisabled = isRunningInIframe();
 
   const { editorTheme, appTheme, setAppTheme } = useHandleAppTheme();
+
+  // STRL: native menu / file-open integration when running in the desktop app
+  useDesktopIntegration(excalidrawAPI);
 
   const [langCode, setLangCode] = useAppLangCode();
 

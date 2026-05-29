@@ -148,6 +148,10 @@ export default defineConfig(({ mode }) => {
       svgrPlugin(),
       ViteEjsPlugin(),
       VitePWA({
+        // STRL: fully disable the service worker for the desktop build
+        // (Electron loads from app://; a SW only adds caching headaches).
+        // Read from process.env so it can be passed on the build CLI.
+        disable: process.env.VITE_APP_DISABLE_PWA === "true",
         registerType: "autoUpdate",
         devOptions: {
           /* set this flag to true to enable in Development mode */

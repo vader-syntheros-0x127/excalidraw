@@ -1,0 +1,15 @@
+{
+  "name": "strl-ideate-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "STRL-Ideate desktop application (Electron shell around excalidraw-app)",
+  "main": "dist/main.js",
+  "scripts": {
+    "build:main": "tsc -p tsconfig.json",
+    "start": "yarn build:main && electron .",
+    "start:dev": "cross-env STRL_DESKTOP_DEV_URL=http://localhost:3000 electron ."
+  },
+  "devDependencies": {
+    "electron": "42.3.0"
+  }
+}

@@ -1,28 +1,19 @@
 // STRL: prominent on-canvas export button (PNG / SVG / PDF).
-// Uses the library's own export utilities so output matches the native
-// "Save as image" dialog; PDF is added on top via jsPDF (raster).
-import {
-  exportToBlob,
-  exportToSvg,
-  exportToCanvas,
-} from "@excalidraw/excalidraw";
-import { jsPDF } from "jspdf";
+// Export logic lives in ./strlExport so the desktop app's native menu can
+// reuse it.
 import React, { useEffect, useRef, useState } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
-import "./StrlExportButton.scss";
+import {
+  resolveScene,
+  sceneToPngBlob,
+  sceneToSvgString,
+  sceneToPdfBytes,
+  triggerDownload,
+} from "./strlExport";
 
-const downloadBlob = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-};
+import "./StrlExportButton.scss";
 
 type ExportFormat = "png" | "svg" | "pdf";
 
@@ -49,58 +40,35 @@ export const StrlExportButton: React.FC<{
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  const getScene = () => {
-    const elements = excalidrawAPI.getSceneElements();
-    if (!elements.length) {
-      excalidrawAPI.setToast({ message: "Nothing to export", duration: 2000 });
-      return null;
-    }
-    return {
-      elements,
-      appState: excalidrawAPI.getAppState(),
-      files: excalidrawAPI.getFiles(),
-      name: excalidrawAPI.getName() || "strl-ideate",
-    };
-  };
-
   const exportAs = async (format: ExportFormat) => {
     if (busy) {
       return;
     }
     setBusy(true);
     try {
-      const scene = getScene();
+      const scene = resolveScene(excalidrawAPI);
       if (!scene) {
         return;
       }
-      const { elements, appState, files, name } = scene;
 
       if (format === "png") {
-        const blob = await exportToBlob({
-          elements,
-          appState,
-          files,
-          mimeType: "image/png",
-        });
-        downloadBlob(blob, `${name}.png`);
+        triggerDownload(
+          await sceneToPngBlob(scene),
+          `${scene.name}.png`,
+          "image/png",
+        );
       } else if (format === "svg") {
-        const svg = await exportToSvg({ elements, appState, files });
-        const data = new XMLSerializer().serializeToString(svg);
-        downloadBlob(
-          new Blob([data], { type: "image/svg+xml" }),
-          `${name}.svg`,
+        triggerDownload(
+          await sceneToSvgString(scene),
+          `${scene.name}.svg`,
+          "image/svg+xml",
         );
       } else {
-        const canvas = await exportToCanvas({ elements, appState, files });
-        const imgData = canvas.toDataURL("image/png");
-        const pdf = new jsPDF({
-          orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
-          unit: "px",
-          format: [canvas.width, canvas.height],
-          hotfixes: ["px_scaling"],
-        });
-        pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
-        pdf.save(`${name}.pdf`);
+        triggerDownload(
+          await sceneToPdfBytes(scene),
+          `${scene.name}.pdf`,
+          "application/pdf",
+        );
       }
     } catch (error: any) {
       excalidrawAPI.setToast({
