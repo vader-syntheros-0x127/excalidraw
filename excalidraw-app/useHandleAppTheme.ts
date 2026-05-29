@@ -15,10 +15,10 @@ export const useHandleAppTheme = () => {
       (localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_THEME) as
         | Theme
         | "system"
-        | null) || THEME.LIGHT
+        | null) || THEME.DARK // STRL: dark mode is the default
     );
   });
-  const [editorTheme, setEditorTheme] = useState<Theme>(THEME.LIGHT);
+  const [editorTheme, setEditorTheme] = useState<Theme>(THEME.DARK); // STRL: dark mode is the default
 
   useEffect(() => {
     const mediaQuery = getDarkThemeMediaQuery();
