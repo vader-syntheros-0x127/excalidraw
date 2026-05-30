@@ -302,11 +302,24 @@ const openFileViaDialog = async () => {
   openFilePath(result.filePaths[0]);
 };
 
+// Max size for an opened scene file (defensive cap).
+const MAX_SCENE_BYTES = 50 * 1024 * 1024;
+
 const openFilePath = (filePath: string) => {
   try {
-    const contents = fs.readFileSync(filePath, "utf8");
+    // STRL: validate the path before reading (defense-in-depth against
+    // path traversal — we only ever open real .excalidraw files).
+    const resolved = path.resolve(filePath);
+    if (path.extname(resolved).toLowerCase() !== ".excalidraw") {
+      return;
+    }
+    const stats = fs.statSync(resolved);
+    if (!stats.isFile() || stats.size > MAX_SCENE_BYTES) {
+      return;
+    }
+    const contents = fs.readFileSync(resolved, "utf8");
     mainWindow?.webContents.send("strl:open-file", {
-      name: path.basename(filePath, ".excalidraw"),
+      name: path.basename(resolved, ".excalidraw"),
       contents,
     });
   } catch (error) {
