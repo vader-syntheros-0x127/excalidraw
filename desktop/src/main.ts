@@ -124,9 +124,18 @@ const registerAppProtocol = () => {
     if (relative === "/" || relative === "") {
       relative = "/index.html";
     }
-    // Resolve inside BUILD_DIR and guard against path traversal.
+    // Resolve inside BUILD_DIR and guard against path traversal. A plain
+    // `startsWith(BUILD_DIR)` prefix check is unsafe — it also matches sibling
+    // dirs like `<BUILD_DIR>-evil` and is separator/-case fragile on Windows —
+    // so compare via path.relative: anything escaping BUILD_DIR yields a
+    // "../" prefix or an absolute (other-drive) relative path.
     const resolved = path.join(BUILD_DIR, relative);
-    if (!resolved.startsWith(BUILD_DIR)) {
+    const relToBuild = path.relative(BUILD_DIR, resolved);
+    if (
+      relToBuild === ".." ||
+      relToBuild.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relToBuild)
+    ) {
       return new Response("Forbidden", { status: 403 });
     }
     // SPA fallback: unknown, extension-less path -> index.html

@@ -1,0 +1,114 @@
+# STRL-Ideate desktop installers (electron-builder) — CI build matrix.
+#
+# Produces downloadable installer ARTIFACTS only:
+#   ubuntu-latest  -> AppImage + deb   (dist:linux)
+#   windows-latest -> NSIS .exe        (dist:win)
+#   macos-latest   -> dmg (x64 + arm64) (dist:mac)
+#
+# NO publish, NO GitHub release, NO auto-update (electron-updater is intentionally
+# absent; do not add a `publish:` block). Builds are UNSIGNED — code signing and
+# notarization are HELD (see the commented env block; wire up once certs exist).
+name: Desktop build
+
+on:
+  workflow_dispatch: {}
+  # Opt-in later: build installers when a version tag is pushed.
+  # push:
+  #   tags:
+  #     - "v*"
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+            dist: "dist:linux"
+          - os: windows-latest
+            name: windows
+            dist: "dist:win"
+          - os: macos-latest
+            name: macos
+            dist: "dist:mac"
+    env:
+      # Never auto-pick a signing identity while signing is HELD → clean unsigned build.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # corepack ships with Node; pin pnpm to the version in root package.json.
+      # MUST run before setup-node so its `cache: pnpm` resolver finds pnpm.
+      - name: Enable corepack + pin pnpm 10.34.1
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.34.1 --activate
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # Cache electron-builder's per-OS binary downloads (Electron dist, nsis,
+      # winCodeSign, dmgbuild) so repeat runs skip the fetch. All are sha-verified
+      # against app-builder-lib's pinned hashes regardless of cache state.
+      - name: Cache electron-builder downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-
+
+      # Root install populates the whole pnpm workspace (packages/*, excalidraw-app,
+      # desktop). node-linker=hoisted gives the flat tree the renderer build +
+      # electron-builder need. "electron" is in pnpm.onlyBuiltDependencies, so its
+      # postinstall runs HERE and unpacks the Electron binary — no rebuild step.
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # prepackage = build:main (tsc) + build:renderer (vite --mode desktop, then
+      # copies excalidraw-app/build -> desktop/renderer); then electron-builder
+      # emits installers to desktop/dist-installers. No `env -u ELECTRON_RUN_AS_NODE`
+      # is needed on clean runners (that variable is a local-dev workaround only),
+      # so the command runs natively on Linux/Windows/macOS.
+      # Code signing + notarization are HELD. To enable later, add an `env:` block
+      # to this step with the relevant secrets (no electron-builder.yml change):
+      #   Windows: CSC_LINK, CSC_KEY_PASSWORD
+      #   macOS:   CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,
+      #            APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+      - name: Build installer (${{ matrix.name }})
+        working-directory: desktop
+        run: pnpm ${{ matrix.dist }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: strl-ideate-${{ matrix.name }}-installers
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            desktop/dist-installers/*.AppImage
+            desktop/dist-installers/*.deb
+            desktop/dist-installers/*.exe
+            desktop/dist-installers/*.dmg

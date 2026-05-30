@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- STRL-Ideate hardened-runtime entitlements. Minimal set for Electron + V8.
+     Intentionally NO com.apple.security.app-sandbox: sandboxing would break the
+     native open/save dialogs the app uses for local .excalidraw files. The app
+     itself runs the renderer with contextIsolation + sandbox and makes no
+     network calls, so the attack surface is the local filesystem only.
+     Lives in assets/ (buildResources) because the repo gitignores build/. -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

@@ -18,11 +18,16 @@ files:
   - "package.json"
   - "renderer/**/*"
 
-# .excalidraw file association (OS-level).
+# .excalidraw file association (OS-level). On Windows, NSIS registers the
+# ProgID/extension; on macOS this becomes a CFBundleDocumentTypes entry; on
+# Linux it populates the .desktop MimeType. The OS then launches the app with
+# the file path (argv on win/linux, open-file event on mac) — main.ts already
+# handles both (takeFileFromArgv + app.on("open-file") + single-instance).
 fileAssociations:
   - ext: excalidraw
     name: STRL-Ideate scene
     role: Editor
+    mimeType: application/vnd.excalidraw+json
 
 linux:
   target:
@@ -34,14 +39,59 @@ linux:
   synopsis: Virtual hand-drawn style whiteboard
   description: STRL-Ideate — a local-first whiteboard for sketching diagrams.
 
-# Placeholders for later phases (signing/notarization done in CI):
+# ── Windows (NSIS installer) ────────────────────────────────────────────────
+# Build on a windows-latest runner. Cross-building on Linux needs wine (absent
+# on the dev host) for rcedit icon/version stamping.
+# Signing is HELD: with no CSC_* env set, electron-builder produces a valid
+# UNSIGNED installer. Provisioning a cert later is env-only, no YAML change.
 win:
   target:
-    - nsis
-  icon: assets/icon.png
+    - target: nsis
+      arch:
+        - x64
+        # - arm64   # enable only when Windows-on-ARM hardware is available to test
+  icon: assets/icon.png # PNG auto-converted to ICO; add assets/icon.ico later for crisp small badges
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
 
+nsis:
+  oneClick: false # assisted wizard
+  perMachine: false # per-user install → no admin/UAC; friendlier unsigned SmartScreen
+  allowElevation: true # user may still opt into all-users
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: STRL-Ideate
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false # keep local scenes/settings (local-first)
+
+# ── macOS (dmg) ─────────────────────────────────────────────────────────────
+# Build on macos-latest (hdiutil + dmgbuild are macOS-only). Signing &
+# notarization are HELD; an unsigned dmg builds with CSC_IDENTITY_AUTO_DISCOVERY=false.
 mac:
   target:
-    - dmg
+    - target: dmg
+      arch:
+        - x64
+        - arm64
   category: public.app-category.graphics-design
-  icon: assets/icon.png
+  icon: assets/icon.png # PNG auto-converted to ICNS
+  darkModeSupport: true
+  minimumSystemVersion: "11.0"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
+  notarize: false # HELD — flip to { teamId: ... } + APPLE_* env later
+
+dmg:
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 140
+      y: 200
+      type: file
+    - x: 400
+      y: 200
+      type: link
+      path: /Applications
