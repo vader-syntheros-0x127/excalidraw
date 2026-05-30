@@ -8,12 +8,12 @@
   "main": "dist/main.js",
   "scripts": {
     "build:main": "tsc -p tsconfig.json",
-    "build:renderer": "yarn --cwd ../excalidraw-app build:desktop && node -e \"const fs=require('fs');fs.rmSync('renderer',{recursive:true,force:true});fs.cpSync('../excalidraw-app/build','renderer',{recursive:true})\"",
-    "prepackage": "yarn build:main && yarn build:renderer",
-    "dist:linux": "yarn prepackage && electron-builder --linux",
-    "dist:win": "yarn prepackage && electron-builder --win",
-    "dist:mac": "yarn prepackage && electron-builder --mac",
-    "start": "yarn build:main && electron .",
+    "build:renderer": "pnpm -C ../excalidraw-app build:desktop && node -e \"const fs=require('fs');fs.rmSync('renderer',{recursive:true,force:true});fs.cpSync('../excalidraw-app/build','renderer',{recursive:true})\"",
+    "prepackage": "pnpm build:main && pnpm build:renderer",
+    "dist:linux": "pnpm prepackage && electron-builder --linux",
+    "dist:win": "pnpm prepackage && electron-builder --win",
+    "dist:mac": "pnpm prepackage && electron-builder --mac",
+    "start": "pnpm build:main && electron .",
     "start:dev": "cross-env STRL_DESKTOP_DEV_URL=http://localhost:3000 electron ."
   },
   "devDependencies": {

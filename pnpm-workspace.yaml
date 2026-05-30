@@ -1,0 +1,4 @@
+packages:
+  - "excalidraw-app"
+  - "desktop"
+  - "packages/*"

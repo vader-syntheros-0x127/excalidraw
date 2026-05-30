@@ -1,5 +1,5 @@
 # STRL-Ideate desktop packaging (electron-builder).
-# The renderer (built SPA) is copied to ./renderer by `yarn build:renderer`
+# The renderer (built SPA) is copied to ./renderer by `pnpm build:renderer`
 # before packaging and bundled alongside the compiled main process.
 appId: com.strl.ideate
 productName: STRL-Ideate
