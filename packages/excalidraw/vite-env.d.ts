@@ -6,6 +6,10 @@ interface ImportMetaEnv {
   // The port to run the dev server
   VITE_APP_PORT: string;
 
+  // STRL: set to "true" in the desktop build to bundle all fonts locally and
+  // skip the remote esm.sh font fallback.
+  VITE_APP_DESKTOP: string;
+
   VITE_APP_BACKEND_V2_GET_URL: string;
   VITE_APP_BACKEND_V2_POST_URL: string;
 

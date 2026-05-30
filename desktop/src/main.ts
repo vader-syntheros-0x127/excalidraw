@@ -20,6 +20,32 @@ import type { MenuItemConstructorOptions } from "electron";
 
 const APP_NAME = "STRL-Ideate";
 const APP_SCHEME = "app";
+
+// STRL: strict Content-Security-Policy for the packaged app, served on the
+// app:// HTML document. Everything loads from the app's own origin ('self') —
+// the desktop build bundles its fonts locally (see woff2-vite-plugins.js /
+// .env.desktop), so there are no remote origins to allow.
+//  - 'wasm-unsafe-eval': pica/image-blob-reduce compile WASM for image resize.
+//  - style 'unsafe-inline': excalidraw relies heavily on inline styles.
+//  - the three script hashes are the inline <script>s in index.html
+//    (dark-mode early paint, local asset-path, window.name). If those change,
+//    recompute (sha256 base64 of each inline script body) or the CSP blocks them
+//    — the STRL_SMOKE check (dark:true / hasEditor:true) will catch a mismatch.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'none'",
+  "script-src 'self' 'wasm-unsafe-eval' 'sha256-iPtxE0n242JUcLKPr7D09tSIF4FKNSy5jqkeySXxfDY=' 'sha256-mXvmZWZG6iAZBw0OliHQaJOSMPc9DbQZJaxywImBlQo=' 'sha256-Kxm9zQ99NqYtDuNSdByEfyFAYVPAqWdmNFx5axumk1w='",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' data: blob:",
+  "worker-src 'self' blob:",
+  "media-src 'self' blob:",
+  "manifest-src 'self'",
+].join("; ");
 // When set (dev), load the live Vite dev server instead of the built files.
 const DEV_URL = process.env.STRL_DESKTOP_DEV_URL;
 // Built SPA location:
@@ -100,13 +126,25 @@ const registerAppProtocol = () => {
       return new Response("Forbidden", { status: 403 });
     }
     // SPA fallback: unknown, extension-less path -> index.html
+    const indexHtml = path.join(BUILD_DIR, "index.html");
     const target =
       fs.existsSync(resolved) && fs.statSync(resolved).isFile()
         ? resolved
         : path.extname(resolved) === ""
-        ? path.join(BUILD_DIR, "index.html")
+        ? indexHtml
         : resolved;
-    return net.fetch(pathToFileURL(target).toString());
+    const response = await net.fetch(pathToFileURL(target).toString());
+    // Enforce the CSP on the HTML document (governs all sub-resources).
+    if (target !== indexHtml) {
+      return response;
+    }
+    const headers = new Headers(response.headers);
+    headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   });
 };
 

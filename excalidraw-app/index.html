@@ -103,8 +103,11 @@
     </style>
 
     <!-- Warmup the connection for Google fonts -->
+    <!-- STRL: skip cross-origin preconnects in the desktop build (local-only, strict CSP) -->
+    <% if (typeof VITE_APP_DESKTOP == 'undefined' || VITE_APP_DESKTOP != 'true') { %>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <% } %>
 
     <!------------------------------------------------------------------------->
     <% if (typeof PROD != 'undefined' && PROD == true) { %>
