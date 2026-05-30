@@ -13,18 +13,22 @@ interface StrlDesktopApi {
   platform: string;
   onMenu: (handler: (action: StrlMenuAction) => void) => () => void;
   onOpenFile: (
-    handler: (file: { name: string; contents: string }) => void,
+    handler: (file: { name: string; contents: string; path: string }) => void,
   ) => () => void;
+  ready: () => void;
+  confirmOpened: (filePath: string) => void;
   saveFile: (payload: {
     data: string | Uint8Array;
     suggestedName: string;
     extension: string;
+    saveAs?: boolean;
   }) => Promise<{
     ok: boolean;
     canceled?: boolean;
     filePath?: string;
     error?: string;
   }>;
+  setDirty: (dirty: boolean) => void;
 }
 
 interface Window {

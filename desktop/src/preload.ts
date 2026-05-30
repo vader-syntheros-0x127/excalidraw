@@ -18,14 +18,30 @@ export type StrlDesktopApi = {
   onMenu: (handler: (action: MenuAction) => void) => () => void;
   /** Subscribe to "open this file" events (CLI / file association / Open…). */
   onOpenFile: (
-    handler: (file: { name: string; contents: string }) => void,
+    handler: (file: { name: string; contents: string; path: string }) => void,
   ) => () => void;
-  /** Show a native Save dialog and write the data. */
+  /** Tell main the renderer is mounted and ready to receive file-opens. */
+  ready: () => void;
+  /** Confirm a file was loaded OK so main can adopt it as the active document. */
+  confirmOpened: (filePath: string) => void;
+  /**
+   * Save data to disk. For a scene ("excalidraw") with an already-open file and
+   * saveAs !== true, main writes in place silently; otherwise a native Save
+   * dialog is shown. Exports always prompt.
+   */
   saveFile: (payload: {
     data: string | Uint8Array;
     suggestedName: string;
     extension: string;
-  }) => Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }>;
+    saveAs?: boolean;
+  }) => Promise<{
+    ok: boolean;
+    canceled?: boolean;
+    filePath?: string;
+    error?: string;
+  }>;
+  /** Report whether the scene has unsaved changes (title marker + close guard). */
+  setDirty: (dirty: boolean) => void;
 };
 
 const api: StrlDesktopApi = {
@@ -37,12 +53,17 @@ const api: StrlDesktopApi = {
     return () => ipcRenderer.removeListener("strl:menu", listener);
   },
   onOpenFile: (handler) => {
-    const listener = (_e: unknown, file: { name: string; contents: string }) =>
-      handler(file);
+    const listener = (
+      _e: unknown,
+      file: { name: string; contents: string; path: string },
+    ) => handler(file);
     ipcRenderer.on("strl:open-file", listener);
     return () => ipcRenderer.removeListener("strl:open-file", listener);
   },
   saveFile: (payload) => ipcRenderer.invoke("strl:save-file", payload),
+  setDirty: (dirty) => ipcRenderer.send("strl:set-dirty", dirty),
+  ready: () => ipcRenderer.send("strl:renderer-ready"),
+  confirmOpened: (filePath) => ipcRenderer.send("strl:opened", filePath),
 };
 
 contextBridge.exposeInMainWorld("strlDesktop", api);

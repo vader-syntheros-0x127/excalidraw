@@ -1,10 +1,13 @@
 // STRL: wires the Electron native File menu and file-open events to the
-// editor. No-op on the web (guarded on window.strlDesktop), so the web build
-// is unaffected.
+// editor, and tracks unsaved-changes ("dirty") state so main can show a file
+// title and guard against losing work. No-op on the web (guarded on
+// window.strlDesktop), so the web build is unaffected.
 import { serializeAsJSON } from "@excalidraw/excalidraw";
 import { loadFromBlob } from "@excalidraw/excalidraw/data/blob";
+import { getSceneVersion } from "@excalidraw/element";
 import { useEffect } from "react";
 
+import type { ExcalidrawElement } from "@excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import {
@@ -23,18 +26,50 @@ export const useDesktopIntegration = (
       return;
     }
 
-    const saveScene = async () => {
+    // ── dirty tracking ──────────────────────────────────────────────────────
+    // Scene version is a hash of element versions — it only changes on real
+    // content edits (not selection/scroll), so it's the right dirty signal.
+    let lastSavedVersion: number | null = null;
+    let lastSentDirty = false;
+
+    const reportDirty = (dirty: boolean) => {
+      if (dirty !== lastSentDirty) {
+        lastSentDirty = dirty;
+        desktop.setDirty(dirty);
+      }
+    };
+    // Treat the given elements as the on-disk baseline → clean.
+    const markSaved = (elements: readonly ExcalidrawElement[]) => {
+      lastSavedVersion = getSceneVersion(elements);
+      reportDirty(false);
+    };
+
+    const offChange = excalidrawAPI.onChange((elements) => {
+      const version = getSceneVersion(elements);
+      if (lastSavedVersion === null) {
+        lastSavedVersion = version; // baseline from the initial (autoloaded) scene
+        return;
+      }
+      reportDirty(version !== lastSavedVersion);
+    });
+
+    // ── save / export ───────────────────────────────────────────────────────
+    const saveScene = async (saveAs: boolean) => {
       const json = serializeAsJSON(
         excalidrawAPI.getSceneElements(),
         excalidrawAPI.getAppState(),
         excalidrawAPI.getFiles(),
         "local",
       );
-      await desktop.saveFile({
+      const result = await desktop.saveFile({
         data: json,
         suggestedName: excalidrawAPI.getName() || "strl-ideate",
         extension: "excalidraw",
+        saveAs,
       });
+      if (result.ok) {
+        markSaved(excalidrawAPI.getSceneElements());
+      }
     };
 
     const exportScene = async (format: "png" | "svg" | "pdf") => {
@@ -70,10 +105,13 @@ export const useDesktopIntegration = (
       switch (action) {
         case "new":
           excalidrawAPI.resetScene();
+          markSaved(excalidrawAPI.getSceneElements()); // fresh scene → clean
           break;
         case "save":
+          void saveScene(false);
+          break;
         case "save-as":
-          void saveScene();
+          void saveScene(true);
           break;
         case "export-png":
           void exportScene("png");
@@ -89,7 +127,11 @@ export const useDesktopIntegration = (
       }
     };
 
-    const handleOpenFile = async (file: { name: string; contents: string }) => {
+    const handleOpenFile = async (file: {
+      name: string;
+      contents: string;
+      path: string;
+    }) => {
       try {
         const blob = new Blob([file.contents], { type: "application/json" });
         const restored = await loadFromBlob(blob, null, null);
@@ -97,6 +139,8 @@ export const useDesktopIntegration = (
         if (restored.files) {
           excalidrawAPI.addFiles(Object.values(restored.files));
         }
+        markSaved(restored.elements ?? []); // just-loaded scene matches disk
+        desktop.confirmOpened(file.path); // main adopts it as the active document
       } catch (error) {
         excalidrawAPI.setToast({
           message: "Failed to open file",
@@ -109,10 +153,15 @@ export const useDesktopIntegration = (
 
     const offMenu = desktop.onMenu(handleMenu);
     const offOpen = desktop.onOpenFile(handleOpenFile);
+    // Now that the open handler is registered, tell main it can deliver any
+    // file requested at launch (file association / CLI). This closes the race
+    // where a launch-time open would otherwise be dropped.
+    desktop.ready();
 
     return () => {
       offMenu();
       offOpen();
+      offChange();
     };
   }, [excalidrawAPI]);
 };

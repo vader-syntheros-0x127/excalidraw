@@ -61,6 +61,10 @@ app.setName(APP_NAME);
 let mainWindow: BrowserWindow | null = null;
 // Path of a .excalidraw file passed on the command line / open-file event.
 let pendingOpenPath: string | null = null;
+// The renderer registers its file-open handler only after React mounts; until
+// it signals readiness, open events are buffered (see openFilePath) so the
+// launch / file-association IPC isn't dropped.
+let rendererReady = false;
 
 // ---------------------------------------------------------------------------
 // Window-state persistence (tiny, dependency-free)
@@ -197,11 +201,39 @@ const createWindow = () => {
     mainWindow.loadURL(`${APP_SCHEME}://-/index.html`);
   }
 
+  // We own the window title (filename + dirty marker); stop the page <title>
+  // ("STRL-Ideate") from overriding it.
+  mainWindow.webContents.on("page-title-updated", (event) => {
+    event.preventDefault();
+  });
+  updateTitle();
+
   // Persist size/position.
   const persist = () => mainWindow && saveWindowState(mainWindow);
   mainWindow.on("resize", persist);
   mainWindow.on("move", persist);
   mainWindow.on("close", persist);
+
+  // Prompt to save unsaved changes before the window closes.
+  mainWindow.on("close", (event) => {
+    if (allowClose || !isDirty || !mainWindow) {
+      return;
+    }
+    event.preventDefault();
+    const decision = promptSaveBeforeClose();
+    if (decision === "cancel") {
+      return;
+    }
+    if (decision === "discard") {
+      allowClose = true;
+      mainWindow.close();
+      return;
+    }
+    // "save": serialize + write, then close once the save resolves.
+    pendingAfterSave = "close";
+    sendMenu("save");
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -211,7 +243,8 @@ const createWindow = () => {
     console.log(
       `[strl-desktop] renderer loaded (electron ${process.versions.electron})`,
     );
-    flushPendingOpen();
+    // Pending file-opens are flushed when the renderer signals readiness
+    // (strl:renderer-ready), not here — the open handler isn't registered yet.
     // Headless smoke check (STRL_SMOKE=1): poll for the editor to mount
     // (React mounts after load), capturing console errors for diagnosis.
     if (process.env.STRL_SMOKE === "1" && mainWindow) {
@@ -268,12 +301,16 @@ const buildMenu = () => {
         {
           label: "New",
           accelerator: "CmdOrCtrl+N",
-          click: () => sendMenu("new"),
+          click: () => doNew(),
         },
         {
           label: "Open…",
           accelerator: "CmdOrCtrl+O",
           click: () => openFileViaDialog(),
+        },
+        {
+          label: "Open Recent",
+          submenu: buildRecentSubmenu(),
         },
         { type: "separator" },
         {
@@ -339,6 +376,145 @@ const buildMenu = () => {
 };
 
 // ---------------------------------------------------------------------------
+// Document state — active file, dirty flag, recent files, window title
+// ---------------------------------------------------------------------------
+let activeFilePath: string | null = null;
+let isDirty = false;
+// When the user picks "Save" in the unsaved-changes prompt, we kick off a save
+// and finish the deferred action (close / new) once that save resolves.
+let pendingAfterSave: "close" | "new" | null = null;
+// Set once the unsaved-changes prompt has been resolved so the next window
+// close is allowed straight through.
+let allowClose = false;
+
+const MAX_RECENT = 10;
+let recentFiles: string[] = [];
+
+const recentFilePath = () =>
+  path.join(app.getPath("userData"), "recent-files.json");
+
+const loadRecentFiles = () => {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(recentFilePath(), "utf8"));
+    recentFiles = Array.isArray(parsed)
+      ? parsed
+          .filter((p): p is string => typeof p === "string")
+          .slice(0, MAX_RECENT)
+      : [];
+  } catch {
+    recentFiles = [];
+  }
+};
+
+const persistRecentFiles = () => {
+  try {
+    fs.writeFileSync(recentFilePath(), JSON.stringify(recentFiles));
+  } catch {
+    // best-effort only
+  }
+};
+
+const updateTitle = () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const name = activeFilePath
+    ? path.basename(activeFilePath, ".excalidraw")
+    : "Untitled";
+  mainWindow.setTitle(`${isDirty ? "● " : ""}${name} — ${APP_NAME}`);
+};
+
+const addRecentFile = (filePath: string) => {
+  const resolved = path.resolve(filePath);
+  recentFiles = [resolved, ...recentFiles.filter((p) => p !== resolved)].slice(
+    0,
+    MAX_RECENT,
+  );
+  persistRecentFiles();
+  buildMenu(); // refresh the "Open Recent" submenu
+};
+
+// Point the document at a saved/opened scene file (null = a fresh, unsaved scene).
+const setActiveFile = (filePath: string | null) => {
+  activeFilePath = filePath ? path.resolve(filePath) : null;
+  isDirty = false;
+  if (activeFilePath) {
+    addRecentFile(activeFilePath); // also rebuilds the menu
+  }
+  updateTitle();
+};
+
+const buildRecentSubmenu = (): MenuItemConstructorOptions[] => {
+  if (recentFiles.length === 0) {
+    return [{ label: "No recent files", enabled: false }];
+  }
+  return [
+    ...recentFiles.map((p) => ({
+      label: path.basename(p),
+      toolTip: p,
+      click: () => openFilePath(p),
+    })),
+    { type: "separator" },
+    {
+      label: "Clear Recent",
+      click: () => {
+        recentFiles = [];
+        persistRecentFiles();
+        buildMenu();
+      },
+    },
+  ];
+};
+
+const promptSaveBeforeClose = (): "save" | "discard" | "cancel" => {
+  if (!mainWindow) {
+    return "discard";
+  }
+  const choice = dialog.showMessageBoxSync(mainWindow, {
+    type: "question",
+    buttons: ["Save", "Don't Save", "Cancel"],
+    defaultId: 0,
+    cancelId: 2,
+    title: "Unsaved changes",
+    message: `Do you want to save the changes you made${
+      activeFilePath ? ` to "${path.basename(activeFilePath)}"` : ""
+    }?`,
+    detail: "Your changes will be lost if you don't save them.",
+  });
+  return choice === 0 ? "save" : choice === 1 ? "discard" : "cancel";
+};
+
+// Finish a close/new that was waiting on a "Save" choice in the prompt.
+const finishPendingAfterSave = () => {
+  const pending = pendingAfterSave;
+  pendingAfterSave = null;
+  if (pending === "close" && mainWindow) {
+    allowClose = true;
+    mainWindow.close();
+  } else if (pending === "new") {
+    setActiveFile(null);
+    sendMenu("new");
+  }
+};
+
+// New scene, prompting to save first if there are unsaved changes.
+const doNew = () => {
+  if (isDirty) {
+    const decision = promptSaveBeforeClose();
+    if (decision === "cancel") {
+      return;
+    }
+    if (decision === "save") {
+      pendingAfterSave = "new";
+      sendMenu("save");
+      return;
+    }
+  }
+  setActiveFile(null);
+  sendMenu("new");
+};
+
+// ---------------------------------------------------------------------------
 // Native file open/save (Phase 2)
 // ---------------------------------------------------------------------------
 const EXCALIDRAW_FILTER = {
@@ -364,10 +540,16 @@ const openFileViaDialog = async () => {
 const MAX_SCENE_BYTES = 50 * 1024 * 1024;
 
 const openFilePath = (filePath: string) => {
+  const resolved = path.resolve(filePath);
+  // Buffer until the renderer has registered its open handler, otherwise the
+  // IPC is silently dropped (launch / file-association race).
+  if (!rendererReady || !mainWindow) {
+    pendingOpenPath = resolved;
+    return;
+  }
   try {
     // STRL: validate the path before reading (defense-in-depth against
     // path traversal — we only ever open real .excalidraw files).
-    const resolved = path.resolve(filePath);
     if (path.extname(resolved).toLowerCase() !== ".excalidraw") {
       return;
     }
@@ -376,9 +558,14 @@ const openFilePath = (filePath: string) => {
       return;
     }
     const contents = fs.readFileSync(resolved, "utf8");
-    mainWindow?.webContents.send("strl:open-file", {
+    // NOTE: the active file is set only after the renderer confirms a
+    // successful load (see the "strl:opened" handler), so a failed/corrupt
+    // open can never make the next Save overwrite a good file with an empty
+    // scene.
+    mainWindow.webContents.send("strl:open-file", {
       name: path.basename(resolved, ".excalidraw"),
       contents,
+      path: resolved,
     });
   } catch (error) {
     dialog.showErrorBox("Open failed", String(error));
@@ -387,12 +574,15 @@ const openFilePath = (filePath: string) => {
 
 const flushPendingOpen = () => {
   if (pendingOpenPath) {
-    openFilePath(pendingOpenPath);
+    const next = pendingOpenPath;
     pendingOpenPath = null;
+    openFilePath(next);
   }
 };
 
 // Renderer asks main to write a file (Save / Save As / Export).
+//  - scene "Save" with an active file writes in place (no dialog);
+//  - "Save As", a first save, or any export shows the native Save dialog.
 ipcMain.handle(
   "strl:save-file",
   async (
@@ -401,35 +591,73 @@ ipcMain.handle(
       data: string | Uint8Array;
       suggestedName: string;
       extension: string;
+      saveAs?: boolean;
     },
   ) => {
     if (!mainWindow) {
       return { ok: false, canceled: true };
     }
-    const result = await dialog.showSaveDialog(mainWindow, {
-      defaultPath: `${payload.suggestedName}.${payload.extension}`,
-      filters: [
-        {
-          name: payload.extension.toUpperCase(),
-          extensions: [payload.extension],
-        },
-      ],
-    });
-    if (result.canceled || !result.filePath) {
-      return { ok: false, canceled: true };
+    const isScene = payload.extension === "excalidraw";
+
+    let targetPath: string | undefined =
+      isScene && !payload.saveAs && activeFilePath ? activeFilePath : undefined;
+
+    if (!targetPath) {
+      const result = await dialog.showSaveDialog(mainWindow, {
+        defaultPath: `${payload.suggestedName}.${payload.extension}`,
+        filters: [
+          {
+            name: payload.extension.toUpperCase(),
+            extensions: [payload.extension],
+          },
+        ],
+      });
+      if (result.canceled || !result.filePath) {
+        pendingAfterSave = null; // user backed out → abort any pending close/new
+        return { ok: false, canceled: true };
+      }
+      targetPath = result.filePath;
     }
+
     try {
       const data =
         typeof payload.data === "string"
           ? payload.data
           : Buffer.from(payload.data);
-      fs.writeFileSync(result.filePath, data);
-      return { ok: true, filePath: result.filePath };
+      fs.writeFileSync(targetPath, data);
+      // Only scene saves change the active document; exports don't.
+      if (isScene) {
+        setActiveFile(targetPath);
+      }
+      finishPendingAfterSave();
+      return { ok: true, filePath: targetPath };
     } catch (error) {
+      pendingAfterSave = null;
       return { ok: false, error: String(error) };
     }
   },
 );
+
+// Renderer reports whether the scene has unsaved changes — drives the title's
+// dirty marker and the close / new prompts.
+ipcMain.on("strl:set-dirty", (_event, dirty: boolean) => {
+  isDirty = Boolean(dirty);
+  updateTitle();
+});
+
+// Renderer has registered its handlers and is ready to receive file-opens.
+ipcMain.on("strl:renderer-ready", () => {
+  rendererReady = true;
+  flushPendingOpen();
+});
+
+// Renderer confirms it successfully loaded an opened file → adopt it as the
+// active document (title + Save target + recent files).
+ipcMain.on("strl:opened", (_event, openedPath: string) => {
+  if (typeof openedPath === "string") {
+    setActiveFile(openedPath);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // File-association / CLI handling
@@ -444,11 +672,7 @@ const takeFileFromArgv = (argv: string[]) => {
 // macOS delivers file-open via this event.
 app.on("open-file", (event, filePath) => {
   event.preventDefault();
-  if (mainWindow) {
-    openFilePath(filePath);
-  } else {
-    pendingOpenPath = filePath;
-  }
+  openFilePath(filePath); // buffers itself until the renderer is ready
 });
 
 // Single-instance: focus existing window and open the file there.
@@ -471,6 +695,7 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     registerAppProtocol();
+    loadRecentFiles();
     buildMenu();
     createWindow();
 
