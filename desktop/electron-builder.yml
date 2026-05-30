@@ -5,9 +5,10 @@ appId: com.strl.ideate
 productName: STRL-Ideate
 copyright: STRL
 
-# asar disabled for now so the app:// protocol can read renderer files
-# straight off disk (simpler than asar-aware fetch); revisit for size later.
-asar: false
+# asar packs the app (dist/ + renderer/) into a single archive — packaging
+# hygiene + fewer files on disk. The app:// handler reads renderer files via
+# fs, which is asar-aware, so no asarUnpack is needed.
+asar: true
 
 directories:
   output: dist-installers

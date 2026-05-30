@@ -4,7 +4,6 @@
 /* eslint-disable no-console -- Electron main process: stdout diagnostics are intentional */
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import {
   app,
@@ -12,7 +11,6 @@ import {
   dialog,
   ipcMain,
   Menu,
-  net,
   protocol,
   shell,
 } from "electron";
@@ -121,6 +119,34 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+const MIME_TYPES: Record<string, string> = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".ttf": "font/ttf",
+  ".wasm": "application/wasm",
+  ".txt": "text/plain",
+};
+
+const isFile = (p: string) => {
+  try {
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
+  }
+};
+
 const registerAppProtocol = () => {
   protocol.handle(APP_SCHEME, async (request) => {
     const { pathname } = new URL(request.url);
@@ -142,26 +168,33 @@ const registerAppProtocol = () => {
     ) {
       return new Response("Forbidden", { status: 403 });
     }
-    // SPA fallback: unknown, extension-less path -> index.html
+    // SPA fallback: unknown, extension-less path -> index.html.
     const indexHtml = path.join(BUILD_DIR, "index.html");
-    const target =
-      fs.existsSync(resolved) && fs.statSync(resolved).isFile()
-        ? resolved
-        : path.extname(resolved) === ""
-        ? indexHtml
-        : resolved;
-    const response = await net.fetch(pathToFileURL(target).toString());
-    // Enforce the CSP on the HTML document (governs all sub-resources).
-    if (target !== indexHtml) {
-      return response;
+    const target = isFile(resolved)
+      ? resolved
+      : path.extname(resolved) === ""
+      ? indexHtml
+      : resolved;
+    // Read via fs (NOT net.fetch of a file:// URL): fs is asar-aware, so this
+    // serves correctly whether the renderer is packed into app.asar (packaged)
+    // or sitting on disk (dev) — which is what lets asar stay enabled.
+    let data: Buffer;
+    try {
+      data = fs.readFileSync(target);
+    } catch {
+      return new Response("Not found", { status: 404 });
     }
-    const headers = new Headers(response.headers);
-    headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
+    const mime =
+      MIME_TYPES[path.extname(target).toLowerCase()] ??
+      "application/octet-stream";
+    const headers = new Headers({ "content-type": mime });
+    // Enforce the CSP on the HTML document (governs all sub-resources).
+    if (target === indexHtml) {
+      headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+    }
+    // Buffer isn't a valid BodyInit type; copy into a fresh ArrayBuffer-backed
+    // Uint8Array (cheap, and assets are cached by Chromium after first load).
+    return new Response(new Uint8Array(data), { status: 200, headers });
   });
 };
 

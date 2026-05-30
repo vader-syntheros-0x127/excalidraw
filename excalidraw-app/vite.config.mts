@@ -111,6 +111,13 @@ export default defineConfig(({ mode }) => {
               return `locales/${id.substring(index + 8)}`;
             }
 
+            // STRL: split React into a separate, rarely-changing vendor chunk so
+            // it caches independently of the app code (eagerly loaded, so this
+            // doesn't affect lazy-loading of features).
+            if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) {
+              return "react-vendor";
+            }
+
             if (id.includes("@excalidraw/mermaid-to-excalidraw")) {
               return "mermaid-to-excalidraw";
             }
