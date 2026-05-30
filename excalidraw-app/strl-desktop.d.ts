@@ -32,8 +32,15 @@ interface StrlDesktopApi {
   getRecentFiles: () => Promise<string[]>;
   onRecentFiles: (handler: (files: string[]) => void) => () => void;
   openRecent: (filePath: string) => void;
+  onSaveAndReport: (
+    handler: (req: { token: string; saveAs: boolean }) => void,
+  ) => () => void;
+  reportSaveDone: (token: string, result: { ok: boolean }) => void;
 }
 
 interface Window {
   strlDesktop?: StrlDesktopApi;
+  // STRL desktop: synchronous unsaved-changes flag the main process reads at
+  // window-close time (set by useDesktopIntegration on every dirty change).
+  __strlIsDirty?: boolean;
 }

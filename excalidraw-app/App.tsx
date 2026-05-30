@@ -327,7 +327,10 @@ const ExcalidrawWrapper = () => {
         excalidrawAPI.updateScene({ appState: { isLoading: true } });
 
         initializeScene({ excalidrawAPI }).then((data) => {
-          loadImages(data);
+          // STRL: load referenced local images for hashchange-loaded scenes too
+          // (not only the initial autoload), so navigating to a new #url= scene
+          // restores its images instead of showing broken placeholders.
+          loadImages(data, /* isInitialLoad */ true);
           if (data.scene) {
             excalidrawAPI.updateScene({
               elements: restoreElements(data.scene.elements, null, {

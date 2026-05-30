@@ -247,24 +247,38 @@ const createWindow = () => {
   mainWindow.on("move", persist);
   mainWindow.on("close", persist);
 
-  // Prompt to save unsaved changes before the window closes.
+  // Prompt to save unsaved changes before the window closes. A 'close' handler
+  // can't await before deciding, so we always defer: prevent the close, then
+  // resolve asynchronously (querying the renderer's authoritative dirty flag).
   mainWindow.on("close", (event) => {
-    if (allowClose || !isDirty || !mainWindow) {
-      return;
+    if (allowClose || !mainWindow) {
+      return; // decision already made → let it close
     }
     event.preventDefault();
-    const decision = promptSaveBeforeClose();
-    if (decision === "cancel") {
-      return;
+    if (closeInProgress) {
+      return; // a decision is already in flight (e.g. Cmd+W mashing)
     }
-    if (decision === "discard") {
-      allowClose = true;
-      mainWindow.close();
-      return;
-    }
-    // "save": serialize + write, then close once the save resolves.
-    pendingAfterSave = "close";
-    sendMenu("save");
+    closeInProgress = true;
+    void (async () => {
+      try {
+        if (!(await currentDirty())) {
+          allowClose = true;
+          mainWindow?.close();
+          return;
+        }
+        const decision = promptSaveBeforeClose();
+        if (decision === "cancel") {
+          return;
+        }
+        if (decision === "save" && !(await requestSaveScene(false)).ok) {
+          return; // user canceled the save → stay open
+        }
+        allowClose = true;
+        mainWindow?.close();
+      } finally {
+        closeInProgress = false;
+      }
+    })();
   });
 
   mainWindow.on("closed", () => {
@@ -334,7 +348,7 @@ const buildMenu = () => {
         {
           label: "New",
           accelerator: "CmdOrCtrl+N",
-          click: () => doNew(),
+          click: () => void doNew(),
         },
         {
           label: "Open…",
@@ -412,13 +426,31 @@ const buildMenu = () => {
 // Document state — active file, dirty flag, recent files, window title
 // ---------------------------------------------------------------------------
 let activeFilePath: string | null = null;
+// Mirror of the renderer's dirty state (fallback only; the renderer's
+// window.__strlIsDirty is authoritative and is what the close guard reads).
 let isDirty = false;
-// When the user picks "Save" in the unsaved-changes prompt, we kick off a save
-// and finish the deferred action (close / new) once that save resolves.
-let pendingAfterSave: "close" | "new" | null = null;
-// Set once the unsaved-changes prompt has been resolved so the next window
-// close is allowed straight through.
+// Set once an unsaved-changes prompt has resolved so the next close goes through.
 let allowClose = false;
+// Re-entrancy guard so mashing Cmd+W can't stack overlapping close flows.
+let closeInProgress = false;
+let saveToken = 0;
+
+// Ask the renderer to save the scene and resolve with whether it actually wrote
+// (false on cancel/error). Token-correlated so concurrent requests don't cross.
+const requestSaveScene = (saveAs: boolean): Promise<{ ok: boolean }> => {
+  if (!mainWindow) {
+    return Promise.resolve({ ok: false });
+  }
+  const token = String(++saveToken);
+  return new Promise((resolve) => {
+    ipcMain.once(`strl:save-done:${token}`, (_event, result) => {
+      resolve(
+        result && typeof result.ok === "boolean" ? result : { ok: false },
+      );
+    });
+    mainWindow!.webContents.send("strl:save-and-report", { token, saveAs });
+  });
+};
 
 const MAX_RECENT = 10;
 let recentFiles: string[] = [];
@@ -524,30 +556,27 @@ const promptSaveBeforeClose = (): "save" | "discard" | "cancel" => {
   return choice === 0 ? "save" : choice === 1 ? "discard" : "cancel";
 };
 
-// Finish a close/new that was waiting on a "Save" choice in the prompt.
-const finishPendingAfterSave = () => {
-  const pending = pendingAfterSave;
-  pendingAfterSave = null;
-  if (pending === "close" && mainWindow) {
-    allowClose = true;
-    mainWindow.close();
-  } else if (pending === "new") {
-    setActiveFile(null);
-    sendMenu("new");
+// Authoritative unsaved-changes check: ask the renderer (it sets
+// window.__strlIsDirty synchronously on every edit), falling back to main's
+// mirror if the renderer is unreachable (e.g. mid-teardown).
+const currentDirty = async (): Promise<boolean> => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return isDirty;
   }
+  return mainWindow.webContents
+    .executeJavaScript("window.__strlIsDirty === true")
+    .catch(() => isDirty);
 };
 
 // New scene, prompting to save first if there are unsaved changes.
-const doNew = () => {
-  if (isDirty) {
+const doNew = async () => {
+  if (await currentDirty()) {
     const decision = promptSaveBeforeClose();
     if (decision === "cancel") {
       return;
     }
-    if (decision === "save") {
-      pendingAfterSave = "new";
-      sendMenu("save");
-      return;
+    if (decision === "save" && !(await requestSaveScene(false)).ok) {
+      return; // user canceled the save → abort New
     }
   }
   setActiveFile(null);
@@ -639,8 +668,16 @@ ipcMain.handle(
     }
     const isScene = payload.extension === "excalidraw";
 
+    // Write in place only when the active scene file still exists on disk —
+    // otherwise fall through to a Save dialog instead of silently recreating a
+    // file the user deleted/renamed externally.
     let targetPath: string | undefined =
-      isScene && !payload.saveAs && activeFilePath ? activeFilePath : undefined;
+      isScene &&
+      !payload.saveAs &&
+      activeFilePath &&
+      fs.existsSync(activeFilePath)
+        ? activeFilePath
+        : undefined;
 
     if (!targetPath) {
       const result = await dialog.showSaveDialog(mainWindow, {
@@ -653,7 +690,6 @@ ipcMain.handle(
         ],
       });
       if (result.canceled || !result.filePath) {
-        pendingAfterSave = null; // user backed out → abort any pending close/new
         return { ok: false, canceled: true };
       }
       targetPath = result.filePath;
@@ -665,14 +701,14 @@ ipcMain.handle(
           ? payload.data
           : Buffer.from(payload.data);
       fs.writeFileSync(targetPath, data);
-      // Only scene saves change the active document; exports don't.
+      // Only scene saves change the active document; exports don't. The save is
+      // side-effect-free beyond this — close/new continuations ride their own
+      // requestSaveScene promise, not this handler.
       if (isScene) {
         setActiveFile(targetPath);
       }
-      finishPendingAfterSave();
       return { ok: true, filePath: targetPath };
     } catch (error) {
-      pendingAfterSave = null;
       return { ok: false, error: String(error) };
     }
   },
@@ -756,12 +792,15 @@ if (!gotLock) {
     createWindow();
 
     // Autosave: every 20s, silently write the active file if it has unsaved
-    // changes. Untitled scenes are skipped (no path → would pop a dialog).
+    // changes. Untitled scenes are skipped (no path → would pop a dialog), and
+    // so is an active file that no longer exists on disk (don't pop a dialog or
+    // resurrect a deleted file from a background timer).
     setInterval(() => {
       if (
         rendererReady &&
         isDirty &&
         activeFilePath &&
+        fs.existsSync(activeFilePath) &&
         mainWindow &&
         !mainWindow.isDestroyed()
       ) {

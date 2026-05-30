@@ -48,6 +48,12 @@ export type StrlDesktopApi = {
   onRecentFiles: (handler: (files: string[]) => void) => () => void;
   /** Open a file from the recents list. */
   openRecent: (filePath: string) => void;
+  /** main asks the renderer to save and report the result back by token. */
+  onSaveAndReport: (
+    handler: (req: { token: string; saveAs: boolean }) => void,
+  ) => () => void;
+  /** Report a requested save's result back to main (resolves requestSaveScene). */
+  reportSaveDone: (token: string, result: { ok: boolean }) => void;
 };
 
 const api: StrlDesktopApi = {
@@ -77,6 +83,14 @@ const api: StrlDesktopApi = {
     return () => ipcRenderer.removeListener("strl:recent-files", listener);
   },
   openRecent: (filePath) => ipcRenderer.send("strl:open-recent", filePath),
+  onSaveAndReport: (handler) => {
+    const listener = (_e: unknown, req: { token: string; saveAs: boolean }) =>
+      handler(req);
+    ipcRenderer.on("strl:save-and-report", listener);
+    return () => ipcRenderer.removeListener("strl:save-and-report", listener);
+  },
+  reportSaveDone: (token, result) =>
+    ipcRenderer.send(`strl:save-done:${token}`, result),
 };
 
 contextBridge.exposeInMainWorld("strlDesktop", api);
