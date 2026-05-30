@@ -13,49 +13,42 @@
     <meta name="theme-color" content="#121212" />
 
     <!-- Primary Meta Tags -->
+    <!-- STRL: local-first single-user app — dropped "collaborative" wording.
+         og/twitter/canonical URLs + twitter:site removed (no public STRL domain
+         or social handle yet). og-image points at a local placeholder; add
+         excalidraw-app/public/og-image.png to enable a social preview. -->
     <meta
       name="title"
-      content="Free, collaborative whiteboard • Hand-drawn look & feel | STRL-Ideate"
+      content="Free, local whiteboard • Hand-drawn look & feel | STRL-Ideate"
     />
     <meta
       name="description"
-      content="STRL-Ideate is a virtual collaborative whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."
+      content="STRL-Ideate is a virtual whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."
     />
-    <meta name="image" content="https://excalidraw.com/og-image-3.png" />
+    <meta name="image" content="/og-image.png" />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:site_name" content="STRL-Ideate" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://excalidraw.com" />
-    <meta
-      property="og:title"
-      content="STRL-Ideate — Collaborative whiteboarding made easy"
-    />
+    <meta property="og:title" content="STRL-Ideate — Whiteboarding made easy" />
     <meta property="og:image:alt" content="STRL-Ideate logo" />
     <meta
       property="og:description"
-      content="STRL-Ideate is a virtual collaborative whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."
+      content="STRL-Ideate is a virtual whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."
     />
-    <meta property="og:image" content="https://excalidraw.com/og-image-3.png" />
+    <meta property="og:image" content="/og-image.png" />
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:site" content="@excalidraw" />
-    <meta property="twitter:url" content="https://excalidraw.com" />
     <meta
       property="twitter:title"
-      content="STRL-Ideate — Collaborative whiteboarding made easy"
+      content="STRL-Ideate — Whiteboarding made easy"
     />
     <meta
       property="twitter:description"
-      content="STRL-Ideate is a virtual collaborative whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."
+      content="STRL-Ideate is a virtual whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."
     />
-    <meta
-      property="twitter:image"
-      content="https://excalidraw.com/og-image-3.png"
-    />
-
-    <link rel="canonical" href="https://excalidraw.com" />
+    <meta property="twitter:image" content="/og-image.png" />
 
     <!------------------------------------------------------------------------->
     <!--   to minimize white flash on load when user has dark mode enabled   -->
@@ -104,7 +97,8 @@
 
     <!-- Warmup the connection for Google fonts -->
     <!-- STRL: skip cross-origin preconnects in the desktop build (local-only, strict CSP) -->
-    <% if (typeof VITE_APP_DESKTOP == 'undefined' || VITE_APP_DESKTOP != 'true') { %>
+    <% if (typeof VITE_APP_DESKTOP == 'undefined' || VITE_APP_DESKTOP != 'true')
+    { %>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <% } %>
@@ -213,7 +207,9 @@
     <!-- STRL: only load analytics when tracking is enabled (web build);
          the desktop build sets VITE_APP_ENABLE_TRACKING=false so this is
          omitted entirely and the app makes no analytics requests. -->
-    <% if (typeof PROD != 'undefined' && PROD == true && typeof VITE_APP_ENABLE_TRACKING != 'undefined' && VITE_APP_ENABLE_TRACKING == 'true') { %>
+    <% if (typeof PROD != 'undefined' && PROD == true && typeof
+    VITE_APP_ENABLE_TRACKING != 'undefined' && VITE_APP_ENABLE_TRACKING ==
+    'true') { %>
     <!-- 100% privacy friendly analytics -->
     <script>
       // need to load this script dynamically bcs. of iframe embed tracking

@@ -2,7 +2,7 @@
   "name": "strl-ideate-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "STRL-Ideate desktop application (Electron shell around excalidraw-app)",
+  "description": "STRL-Ideate — a local-first whiteboard for sketching diagrams",
   "author": "STRL <revan@secarclabs.com>",
   "homepage": "https://github.com/vader-syntheros-0x127/excalidraw",
   "main": "dist/main.js",

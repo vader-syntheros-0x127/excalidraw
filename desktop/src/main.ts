@@ -1,6 +1,7 @@
 // STRL-Ideate desktop — Electron main process.
 // Wraps the built excalidraw-app SPA in a desktop window, served over a
 // custom `app://` protocol so the app keeps its absolute (`/`) asset paths.
+/* eslint-disable no-console -- Electron main process: stdout diagnostics are intentional */
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -79,7 +80,10 @@ const stateFilePath = () =>
 
 const loadWindowState = (): WindowState => {
   try {
-    return { ...DEFAULT_STATE, ...JSON.parse(fs.readFileSync(stateFilePath(), "utf8")) };
+    return {
+      ...DEFAULT_STATE,
+      ...JSON.parse(fs.readFileSync(stateFilePath(), "utf8")),
+    };
   } catch {
     return { ...DEFAULT_STATE };
   }
@@ -195,7 +199,9 @@ const createWindow = () => {
 
   // Once the renderer is ready, deliver any file requested at launch.
   mainWindow.webContents.on("did-finish-load", async () => {
-    console.log(`[strl-desktop] renderer loaded (electron ${process.versions.electron})`);
+    console.log(
+      `[strl-desktop] renderer loaded (electron ${process.versions.electron})`,
+    );
     flushPendingOpen();
     // Headless smoke check (STRL_SMOKE=1): poll for the editor to mount
     // (React mounts after load), capturing console errors for diagnosis.
@@ -246,20 +252,26 @@ const buildMenu = () => {
   const isMac = process.platform === "darwin";
 
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? ([{ role: "appMenu" }] as MenuItemConstructorOptions[])
-      : []),
+    ...(isMac ? ([{ role: "appMenu" }] as MenuItemConstructorOptions[]) : []),
     {
       label: "File",
       submenu: [
-        { label: "New", accelerator: "CmdOrCtrl+N", click: () => sendMenu("new") },
+        {
+          label: "New",
+          accelerator: "CmdOrCtrl+N",
+          click: () => sendMenu("new"),
+        },
         {
           label: "Open…",
           accelerator: "CmdOrCtrl+O",
           click: () => openFileViaDialog(),
         },
         { type: "separator" },
-        { label: "Save", accelerator: "CmdOrCtrl+S", click: () => sendMenu("save") },
+        {
+          label: "Save",
+          accelerator: "CmdOrCtrl+S",
+          click: () => sendMenu("save"),
+        },
         {
           label: "Save As…",
           accelerator: "CmdOrCtrl+Shift+S",
@@ -304,13 +316,12 @@ const buildMenu = () => {
               type: "info",
               title: `About ${APP_NAME}`,
               message: APP_NAME,
-              detail: `Version ${app.getVersion()}\nElectron ${process.versions.electron}`,
+              detail: `Version ${app.getVersion()}\nElectron ${
+                process.versions.electron
+              }`,
             }),
         },
-        {
-          label: "Learn More",
-          click: () => shell.openExternal("https://github.com/excalidraw/excalidraw"),
-        },
+        // STRL: removed "Learn More" (linked to upstream excalidraw GitHub)
       ],
     },
   ];
@@ -377,7 +388,11 @@ ipcMain.handle(
   "strl:save-file",
   async (
     _event,
-    payload: { data: string | Uint8Array; suggestedName: string; extension: string },
+    payload: {
+      data: string | Uint8Array;
+      suggestedName: string;
+      extension: string;
+    },
   ) => {
     if (!mainWindow) {
       return { ok: false, canceled: true };
@@ -385,7 +400,10 @@ ipcMain.handle(
     const result = await dialog.showSaveDialog(mainWindow, {
       defaultPath: `${payload.suggestedName}.${payload.extension}`,
       filters: [
-        { name: payload.extension.toUpperCase(), extensions: [payload.extension] },
+        {
+          name: payload.extension.toUpperCase(),
+          extensions: [payload.extension],
+        },
       ],
     });
     if (result.canceled || !result.filePath) {
@@ -470,7 +488,9 @@ app.on("web-contents-created", (_event, contents) => {
     return { action: "deny" };
   });
   contents.on("will-navigate", (event, url) => {
-    const allowed = DEV_URL ? url.startsWith(DEV_URL) : url.startsWith(`${APP_SCHEME}://`);
+    const allowed = DEV_URL
+      ? url.startsWith(DEV_URL)
+      : url.startsWith(`${APP_SCHEME}://`);
     if (!allowed) {
       event.preventDefault();
     }
