@@ -50,8 +50,10 @@ win:
       arch:
         - x64
         # - arm64   # enable only when Windows-on-ARM hardware is available to test
+    - target: portable
+      arch:
+        - x64
   icon: assets/icon.png # PNG auto-converted to ICO; add assets/icon.ico later for crisp small badges
-  artifactName: ${productName}-${version}-${arch}-setup.${ext}
 
 nsis:
   oneClick: false # assisted wizard
@@ -63,6 +65,13 @@ nsis:
   shortcutName: STRL-Ideate
   runAfterFinish: true
   deleteAppDataOnUninstall: false # keep local scenes/settings (local-first)
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+
+# Portable build: a single self-contained .exe that needs no installation — it
+# unpacks to %TEMP% and launches. Handy for USB sticks / locked-down machines.
+portable:
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}
+  requestExecutionLevel: user # run as the current user, never prompts for admin
 
 # ── macOS (dmg) ─────────────────────────────────────────────────────────────
 # Build on macos-latest (hdiutil + dmgbuild are macOS-only). Signing &

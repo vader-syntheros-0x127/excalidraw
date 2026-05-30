@@ -2,7 +2,7 @@
 #
 # Produces downloadable installer ARTIFACTS only:
 #   ubuntu-latest  -> AppImage + deb   (dist:linux)
-#   windows-latest -> NSIS .exe        (dist:win)
+#   windows-latest -> NSIS installer + portable .exe (dist:win)
 #   macos-latest   -> dmg (x64 + arm64) (dist:mac)
 #
 # NO publish, NO GitHub release, NO auto-update (electron-updater is intentionally
