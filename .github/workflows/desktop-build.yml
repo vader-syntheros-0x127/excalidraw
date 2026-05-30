@@ -101,6 +101,18 @@ jobs:
         working-directory: desktop
         run: pnpm ${{ matrix.dist }}
 
+      # SHA-256 sidecars so downstream consumers can verify exactly what CI
+      # produced. node is on every runner, so this is identical on win/mac/linux
+      # (bash shell gives one uniform loop; Git-Bash provides it on Windows).
+      - name: SHA-256 checksums
+        working-directory: desktop/dist-installers
+        shell: bash
+        run: |
+          for f in *.AppImage *.deb *.exe *.dmg; do
+            [ -e "$f" ] || continue
+            node -e "const fs=require('fs'),c=require('crypto');const f=process.argv[1];const h=c.createHash('sha256').update(fs.readFileSync(f)).digest('hex');fs.writeFileSync(f+'.sha256',h+'  '+f+'\n');console.log(h+'  '+f)" "$f"
+          done
+
       - name: Upload installers
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -112,3 +124,4 @@ jobs:
             desktop/dist-installers/*.deb
             desktop/dist-installers/*.exe
             desktop/dist-installers/*.dmg
+            desktop/dist-installers/*.sha256
