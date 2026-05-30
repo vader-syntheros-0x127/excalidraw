@@ -414,6 +414,11 @@ const persistRecentFiles = () => {
   }
 };
 
+// Push the recent-files list to the renderer (drives the welcome-screen list).
+const broadcastRecent = () => {
+  mainWindow?.webContents.send("strl:recent-files", recentFiles);
+};
+
 const updateTitle = () => {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -432,6 +437,7 @@ const addRecentFile = (filePath: string) => {
   );
   persistRecentFiles();
   buildMenu(); // refresh the "Open Recent" submenu
+  broadcastRecent();
 };
 
 // Point the document at a saved/opened scene file (null = a fresh, unsaved scene).
@@ -461,6 +467,7 @@ const buildRecentSubmenu = (): MenuItemConstructorOptions[] => {
         recentFiles = [];
         persistRecentFiles();
         buildMenu();
+        broadcastRecent();
       },
     },
   ];
@@ -649,6 +656,22 @@ ipcMain.on("strl:set-dirty", (_event, dirty: boolean) => {
 ipcMain.on("strl:renderer-ready", () => {
   rendererReady = true;
   flushPendingOpen();
+  broadcastRecent(); // seed the welcome-screen recents list
+});
+
+// Welcome screen asks for the recent-files list.
+ipcMain.handle("strl:get-recent", () => recentFiles);
+
+// Welcome screen asks to open a recent file. Only paths already in the recents
+// list (which main itself recorded) are honoured — the renderer can't open
+// arbitrary paths this way.
+ipcMain.on("strl:open-recent", (_event, filePath: string) => {
+  if (
+    typeof filePath === "string" &&
+    recentFiles.includes(path.resolve(filePath))
+  ) {
+    openFilePath(filePath);
+  }
 });
 
 // Renderer confirms it successfully loaded an opened file → adopt it as the
@@ -698,6 +721,20 @@ if (!gotLock) {
     loadRecentFiles();
     buildMenu();
     createWindow();
+
+    // Autosave: every 20s, silently write the active file if it has unsaved
+    // changes. Untitled scenes are skipped (no path → would pop a dialog).
+    setInterval(() => {
+      if (
+        rendererReady &&
+        isDirty &&
+        activeFilePath &&
+        mainWindow &&
+        !mainWindow.isDestroyed()
+      ) {
+        sendMenu("save");
+      }
+    }, 20_000);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

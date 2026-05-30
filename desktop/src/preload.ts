@@ -42,6 +42,12 @@ export type StrlDesktopApi = {
   }>;
   /** Report whether the scene has unsaved changes (title marker + close guard). */
   setDirty: (dirty: boolean) => void;
+  /** Fetch the recent-files list (absolute paths, newest first). */
+  getRecentFiles: () => Promise<string[]>;
+  /** Subscribe to recent-files updates (drives the welcome-screen list). */
+  onRecentFiles: (handler: (files: string[]) => void) => () => void;
+  /** Open a file from the recents list. */
+  openRecent: (filePath: string) => void;
 };
 
 const api: StrlDesktopApi = {
@@ -64,6 +70,13 @@ const api: StrlDesktopApi = {
   setDirty: (dirty) => ipcRenderer.send("strl:set-dirty", dirty),
   ready: () => ipcRenderer.send("strl:renderer-ready"),
   confirmOpened: (filePath) => ipcRenderer.send("strl:opened", filePath),
+  getRecentFiles: () => ipcRenderer.invoke("strl:get-recent"),
+  onRecentFiles: (handler) => {
+    const listener = (_e: unknown, files: string[]) => handler(files);
+    ipcRenderer.on("strl:recent-files", listener);
+    return () => ipcRenderer.removeListener("strl:recent-files", listener);
+  },
+  openRecent: (filePath) => ipcRenderer.send("strl:open-recent", filePath),
 };
 
 contextBridge.exposeInMainWorld("strlDesktop", api);

@@ -29,6 +29,9 @@ interface StrlDesktopApi {
     error?: string;
   }>;
   setDirty: (dirty: boolean) => void;
+  getRecentFiles: () => Promise<string[]>;
+  onRecentFiles: (handler: (files: string[]) => void) => () => void;
+  openRecent: (filePath: string) => void;
 }
 
 interface Window {
