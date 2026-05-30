@@ -2,8 +2,10 @@ import { Footer } from "@excalidraw/excalidraw/index";
 import React from "react";
 
 import { DebugFooter, isVisualDebuggerEnabled } from "./DebugCanvas";
-import { EncryptedIcon } from "./EncryptedIcon";
 
+// STRL: removed the "end-to-end encrypted" shield/link — STRL-Ideate is local-only
+// (no collaboration), so the E2E-encryption claim and the plus.excalidraw.com link
+// no longer apply. Footer keeps only the dev-only visual debugger toggle.
 export const AppFooter = React.memo(
   ({ onChange }: { onChange: () => void }) => {
     return (
@@ -16,8 +18,6 @@ export const AppFooter = React.memo(
           }}
         >
           {isVisualDebuggerEnabled() && <DebugFooter onChange={onChange} />}
-          <EncryptedIcon />
-          {/* STRL: app is always local/E2E, no Plus account */}
         </div>
       </Footer>
     );
