@@ -10,12 +10,7 @@ import { useEffect } from "react";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
-import {
-  resolveScene,
-  sceneToPngBlob,
-  sceneToSvgString,
-  sceneToPdfBytes,
-} from "./components/strlExport";
+import { resolveScene, sceneToExportBytes } from "./components/strlExport";
 
 export const useDesktopIntegration = (
   excalidrawAPI: ExcalidrawImperativeAPI | null,
@@ -94,28 +89,8 @@ export const useDesktopIntegration = (
       if (!scene) {
         return;
       }
-      if (format === "png") {
-        const bytes = new Uint8Array(
-          await (await sceneToPngBlob(scene)).arrayBuffer(),
-        );
-        await desktop.saveFile({
-          data: bytes,
-          suggestedName: scene.name,
-          extension: "png",
-        });
-      } else if (format === "svg") {
-        await desktop.saveFile({
-          data: await sceneToSvgString(scene),
-          suggestedName: scene.name,
-          extension: "svg",
-        });
-      } else {
-        await desktop.saveFile({
-          data: await sceneToPdfBytes(scene),
-          suggestedName: scene.name,
-          extension: "pdf",
-        });
-      }
+      const { data, extension } = await sceneToExportBytes(scene, format);
+      await desktop.saveFile({ data, suggestedName: scene.name, extension });
     };
 
     const handleMenu = (action: StrlMenuAction) => {

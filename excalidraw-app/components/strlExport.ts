@@ -70,6 +70,41 @@ export const sceneToPdfBytes = async (
   return new Uint8Array(pdf.output("arraybuffer"));
 };
 
+export type StrlExportFormat = "png" | "svg" | "pdf";
+
+/**
+ * Render the scene to bytes for a format — the single dispatch point used by
+ * both the web download button and the desktop File ▸ Export menu, so the
+ * per-format logic lives in exactly one place.
+ */
+export const sceneToExportBytes = async (
+  scene: StrlScene,
+  format: StrlExportFormat,
+): Promise<{
+  data: string | Uint8Array;
+  extension: StrlExportFormat;
+  mimeType: string;
+}> => {
+  if (format === "png") {
+    const bytes = new Uint8Array(
+      await (await sceneToPngBlob(scene)).arrayBuffer(),
+    );
+    return { data: bytes, extension: "png", mimeType: "image/png" };
+  }
+  if (format === "svg") {
+    return {
+      data: await sceneToSvgString(scene),
+      extension: "svg",
+      mimeType: "image/svg+xml",
+    };
+  }
+  return {
+    data: await sceneToPdfBytes(scene),
+    extension: "pdf",
+    mimeType: "application/pdf",
+  };
+};
+
 /** Browser download (used by the web/on-canvas export button). */
 export const triggerDownload = (
   data: Blob | string | Uint8Array,

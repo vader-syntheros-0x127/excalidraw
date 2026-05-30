@@ -7,9 +7,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import {
   resolveScene,
-  sceneToPngBlob,
-  sceneToSvgString,
-  sceneToPdfBytes,
+  sceneToExportBytes,
   triggerDownload,
 } from "./strlExport";
 
@@ -51,25 +49,11 @@ export const StrlExportButton: React.FC<{
         return;
       }
 
-      if (format === "png") {
-        triggerDownload(
-          await sceneToPngBlob(scene),
-          `${scene.name}.png`,
-          "image/png",
-        );
-      } else if (format === "svg") {
-        triggerDownload(
-          await sceneToSvgString(scene),
-          `${scene.name}.svg`,
-          "image/svg+xml",
-        );
-      } else {
-        triggerDownload(
-          await sceneToPdfBytes(scene),
-          `${scene.name}.pdf`,
-          "application/pdf",
-        );
-      }
+      const { data, extension, mimeType } = await sceneToExportBytes(
+        scene,
+        format,
+      );
+      triggerDownload(data, `${scene.name}.${extension}`, mimeType);
     } catch (error: any) {
       excalidrawAPI.setToast({
         message: `Export failed: ${error?.message ?? "unknown error"}`,
