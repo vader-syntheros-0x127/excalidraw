@@ -34,5 +34,12 @@
     }
   },
   "include": ["packages", "excalidraw-app"],
-  "exclude": ["examples", "dist", "types", "tests"]
+  "exclude": [
+    "examples",
+    "dist",
+    "types",
+    "tests",
+    "packages/strl-authoring",
+    "packages/strl-mcp-server"
+  ]
 }

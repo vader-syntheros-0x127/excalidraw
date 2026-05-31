@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@excalidraw/common": ["../common/src/index.ts"],
+      "@excalidraw/common/*": ["../common/src/*"],
+      "@excalidraw/element": ["../element/src/index.ts"],
+      "@excalidraw/element/*": ["../element/src/*"],
+      "@excalidraw/excalidraw": ["../excalidraw/index.tsx"],
+      "@excalidraw/excalidraw/*": ["../excalidraw/*"],
+      "@excalidraw/math": ["../math/src/index.ts"],
+      "@excalidraw/math/*": ["../math/src/*"],
+      "@excalidraw/utils": ["../utils/src/index.ts"],
+      "@excalidraw/utils/*": ["../utils/src/*"],
+      "@excalidraw/fractional-indexing": ["../fractional-indexing/src/index.ts"],
+      "@excalidraw/fractional-indexing/*": ["../fractional-indexing/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "global.d.ts"]
+}
