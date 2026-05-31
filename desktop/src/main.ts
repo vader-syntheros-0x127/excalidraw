@@ -2,6 +2,7 @@
 // Wraps the built excalidraw-app SPA in a desktop window, served over a
 // custom `app://` protocol so the app keeps its absolute (`/`) asset paths.
 /* eslint-disable no-console -- Electron main process: stdout diagnostics are intentional */
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -263,6 +264,7 @@ const createWindow = () => {
   });
 
   mainWindow.on("closed", () => {
+    stopWatching(); // STRL: dispose the live-reload watcher with the window
     mainWindow = null;
   });
 
@@ -416,6 +418,17 @@ let allowClose = false;
 let closeInProgress = false;
 let saveToken = 0;
 
+// STRL: live file-watch state. We reload the active scene when an external tool
+// (e.g. the @strl/mcp-server) rewrites it on disk — the channel is the
+// filesystem, so no network port is opened and the strict CSP is untouched.
+let sceneWatcher: fs.FSWatcher | null = null;
+let watchDebounce: ReturnType<typeof setTimeout> | null = null;
+// sha256 of the bytes the app last wrote — lets the watcher ignore our own saves
+// (timing-independent; the app writes atomically so no partial reads occur).
+let lastWrittenHash: string | null = null;
+// Re-entrancy guard so a burst of external changes can't stack conflict dialogs.
+let conflictPromptOpen = false;
+
 // Ask the renderer to save the scene and resolve with whether it actually wrote
 // (false on cancel/error). Token-correlated so concurrent requests don't cross.
 const requestSaveScene = (saveAs: boolean): Promise<{ ok: boolean }> => {
@@ -492,6 +505,9 @@ const setActiveFile = (filePath: string | null) => {
   isDirty = false;
   if (activeFilePath) {
     addRecentFile(activeFilePath); // also rebuilds the menu
+    startWatching(activeFilePath); // STRL: live-reload external changes
+  } else {
+    stopWatching();
   }
   updateTitle();
 };
@@ -630,6 +646,125 @@ const flushPendingOpen = () => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// STRL: live file-watch — reload the active scene when an external tool (e.g.
+// the @strl/mcp-server) rewrites it on disk. We watch the parent directory
+// (survives atomic write-temp-then-rename, which replaces the inode) and ignore
+// the app's own writes via a content hash, so saves/autosaves don't loop.
+// ---------------------------------------------------------------------------
+const sha256 = (data: string | Buffer): string =>
+  crypto.createHash("sha256").update(data).digest("hex");
+
+const stopWatching = () => {
+  if (watchDebounce) {
+    clearTimeout(watchDebounce);
+    watchDebounce = null;
+  }
+  if (sceneWatcher) {
+    sceneWatcher.close();
+    sceneWatcher = null;
+  }
+};
+
+const handleExternalChange = async () => {
+  if (!activeFilePath || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const target = activeFilePath;
+  let stats: fs.Stats;
+  try {
+    stats = fs.statSync(target);
+  } catch {
+    // Removed/renamed away externally: keep the in-memory scene, notify the
+    // renderer, stop watching. A later Save recreates it via a dialog.
+    mainWindow.webContents.send("strl:external-removed", {
+      name: path.basename(target, ".excalidraw"),
+    });
+    stopWatching();
+    return;
+  }
+  if (!stats.isFile() || stats.size > MAX_SCENE_BYTES) {
+    return;
+  }
+  let contents: string;
+  try {
+    contents = fs.readFileSync(target, "utf8");
+  } catch {
+    return; // mid-write/unreadable — a later event will settle
+  }
+  // Self-write guard: the app writes atomically and records the hash first, so
+  // any event whose content equals our last write is our own save — ignore it.
+  // Timing-independent, so it can never mask a genuine external change.
+  if (sha256(contents) === lastWrittenHash) {
+    return;
+  }
+  const name = path.basename(target, ".excalidraw");
+  if (!(await currentDirty())) {
+    // Clean scene → reload silently.
+    mainWindow.webContents.send("strl:external-change", {
+      name,
+      contents,
+      path: target,
+    });
+    return;
+  }
+  // Dirty scene → never clobber. Prompt natively (consistent with the
+  // save/close dialogs); reload re-reads fresh from disk on explicit consent.
+  if (conflictPromptOpen) {
+    return;
+  }
+  conflictPromptOpen = true;
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: "question",
+    buttons: ["Reload", "Keep my version"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "File changed on disk",
+    message: `"${name}" was changed by another program.`,
+    detail:
+      "Reload the on-disk version (discards your unsaved changes), or keep your version (your next save overwrites the file).",
+  });
+  conflictPromptOpen = false;
+  if (response === 0 && activeFilePath === target && mainWindow) {
+    try {
+      const fresh = fs.readFileSync(target, "utf8");
+      mainWindow.webContents.send("strl:external-change", {
+        name,
+        contents: fresh,
+        path: target,
+      });
+    } catch {
+      // vanished between prompt and reload — ignore
+    }
+  }
+};
+
+const startWatching = (filePath: string) => {
+  stopWatching();
+  try {
+    sceneWatcher = fs.watch(path.dirname(filePath), (_eventType, filename) => {
+      if (
+        filename &&
+        path.basename(filename.toString()) !== path.basename(filePath)
+      ) {
+        return;
+      }
+      if (watchDebounce) {
+        clearTimeout(watchDebounce);
+      }
+      // Debounce coalesces the multi-event burst of a single write, and lets an
+      // atomic writer finish before we read.
+      watchDebounce = setTimeout(() => {
+        watchDebounce = null;
+        void handleExternalChange();
+      }, 150);
+    });
+    sceneWatcher.on("error", () => stopWatching());
+  } catch {
+    // best-effort: live reload is a convenience, not a correctness requirement
+  }
+};
+
 // Renderer asks main to write a file (Save / Save As / Export).
 //  - scene "Save" with an active file writes in place (no dialog);
 //  - "Save As", a first save, or any export shows the native Save dialog.
@@ -681,7 +816,18 @@ ipcMain.handle(
         typeof payload.data === "string"
           ? payload.data
           : Buffer.from(payload.data);
-      fs.writeFileSync(targetPath, data);
+      // STRL: record the hash so the file-watcher recognises (and ignores) the
+      // app's own save, and write atomically (temp + rename) so the watcher never
+      // observes a partial file. Together these make a time-based suppress window
+      // unnecessary — so an external change is never masked by a recent save.
+      if (isScene) {
+        lastWrittenHash = sha256(data);
+      }
+      const tmpPath = `${targetPath}.strl-${process.pid}-${Date.now().toString(
+        36,
+      )}.tmp`;
+      fs.writeFileSync(tmpPath, data);
+      fs.renameSync(tmpPath, targetPath);
       // Only scene saves change the active document; exports don't. The save is
       // side-effect-free beyond this — close/new continuations ride their own
       // requestSaveScene promise, not this handler.
@@ -797,6 +943,7 @@ if (!gotLock) {
   });
 
   app.on("window-all-closed", () => {
+    stopWatching(); // STRL: ensure no watcher leaks past the last window
     if (process.platform !== "darwin") {
       app.quit();
     }

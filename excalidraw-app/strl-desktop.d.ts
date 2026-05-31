@@ -36,6 +36,10 @@ interface StrlDesktopApi {
     handler: (req: { token: string; saveAs: boolean }) => void,
   ) => () => void;
   reportSaveDone: (token: string, result: { ok: boolean }) => void;
+  onExternalChange: (
+    handler: (file: { name: string; contents: string; path: string }) => void,
+  ) => () => void;
+  onExternalRemoved: (handler: (info: { name: string }) => void) => () => void;
 }
 
 interface Window {

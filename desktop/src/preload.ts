@@ -54,6 +54,16 @@ export type StrlDesktopApi = {
   ) => () => void;
   /** Report a requested save's result back to main (resolves requestSaveScene). */
   reportSaveDone: (token: string, result: { ok: boolean }) => void;
+  /**
+   * Subscribe to live external changes to the active file (e.g. an AI/MCP tool
+   * rewrote it on disk). main only sends this when it's safe to apply: the scene
+   * is clean, or the user chose "Reload" at the conflict prompt.
+   */
+  onExternalChange: (
+    handler: (file: { name: string; contents: string; path: string }) => void,
+  ) => () => void;
+  /** Subscribe to the active file being deleted/renamed away on disk. */
+  onExternalRemoved: (handler: (info: { name: string }) => void) => () => void;
 };
 
 const api: StrlDesktopApi = {
@@ -91,6 +101,19 @@ const api: StrlDesktopApi = {
   },
   reportSaveDone: (token, result) =>
     ipcRenderer.send(`strl:save-done:${token}`, result),
+  onExternalChange: (handler) => {
+    const listener = (
+      _e: unknown,
+      file: { name: string; contents: string; path: string },
+    ) => handler(file);
+    ipcRenderer.on("strl:external-change", listener);
+    return () => ipcRenderer.removeListener("strl:external-change", listener);
+  },
+  onExternalRemoved: (handler) => {
+    const listener = (_e: unknown, info: { name: string }) => handler(info);
+    ipcRenderer.on("strl:external-removed", listener);
+    return () => ipcRenderer.removeListener("strl:external-removed", listener);
+  },
 };
 
 contextBridge.exposeInMainWorld("strlDesktop", api);

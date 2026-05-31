@@ -119,23 +119,28 @@ export const useDesktopIntegration = (
       }
     };
 
+    // Load a serialized scene onto the canvas and reset the dirty baseline so the
+    // reload doesn't register as an unsaved edit. `onApplied` runs right after the
+    // scene is on screen (used by open to confirm the active document before
+    // addFiles), so a later failure can't leave main pointing at the wrong file.
+    const applyScene = async (contents: string, onApplied?: () => void) => {
+      const blob = new Blob([contents], { type: "application/json" });
+      const restored = await loadFromBlob(blob, null, null);
+      excalidrawAPI.updateScene(restored);
+      onApplied?.();
+      if (restored.files) {
+        excalidrawAPI.addFiles(Object.values(restored.files));
+      }
+      markSaved(excalidrawAPI.getSceneElementsIncludingDeleted()); // just-loaded → clean
+    };
+
     const handleOpenFile = async (file: {
       name: string;
       contents: string;
       path: string;
     }) => {
       try {
-        const blob = new Blob([file.contents], { type: "application/json" });
-        const restored = await loadFromBlob(blob, null, null);
-        excalidrawAPI.updateScene(restored);
-        // Adopt the active document at the commit point — right after the scene
-        // is on screen, BEFORE addFiles/markSaved — so a later failure can't
-        // leave main pointing at the previous file (a Save would clobber it).
-        desktop.confirmOpened(file.path);
-        if (restored.files) {
-          excalidrawAPI.addFiles(Object.values(restored.files));
-        }
-        markSaved(excalidrawAPI.getSceneElementsIncludingDeleted()); // just-loaded → clean
+        await applyScene(file.contents, () => desktop.confirmOpened(file.path));
       } catch (error) {
         excalidrawAPI.setToast({
           message: "Failed to open file",
@@ -146,6 +151,34 @@ export const useDesktopIntegration = (
       }
     };
 
+    // STRL: live reload when an external tool (e.g. the MCP server) rewrites the
+    // active file. main only sends this when it's safe (scene clean, or the user
+    // chose "Reload" at the conflict prompt) — so we apply it without re-confirming
+    // the active document (it's unchanged).
+    const handleExternalChange = async (file: {
+      name: string;
+      contents: string;
+      path: string;
+    }) => {
+      try {
+        await applyScene(file.contents);
+      } catch (error) {
+        excalidrawAPI.setToast({
+          message: "Failed to reload external change",
+          duration: 3000,
+        });
+        // eslint-disable-next-line no-console
+        console.error("STRL desktop external reload failed", error);
+      }
+    };
+
+    const handleExternalRemoved = (info: { name: string }) => {
+      excalidrawAPI.setToast({
+        message: `"${info.name}" was removed on disk — Save to recreate it`,
+        duration: 4000,
+      });
+    };
+
     const offMenu = desktop.onMenu(handleMenu);
     const offOpen = desktop.onOpenFile(handleOpenFile);
     // Awaitable save round-trip: main asks us to save and we report the result
@@ -154,6 +187,8 @@ export const useDesktopIntegration = (
     const offSaveReq = desktop.onSaveAndReport(async ({ token, saveAs }) => {
       desktop.reportSaveDone(token, await saveScene(saveAs));
     });
+    const offExternalChange = desktop.onExternalChange(handleExternalChange);
+    const offExternalRemoved = desktop.onExternalRemoved(handleExternalRemoved);
     // Now that handlers are registered, tell main it can deliver any file
     // requested at launch (file association / CLI) — closes the dropped-IPC race.
     desktop.ready();
@@ -162,6 +197,8 @@ export const useDesktopIntegration = (
       offMenu();
       offOpen();
       offSaveReq();
+      offExternalChange();
+      offExternalRemoved();
       offIncrement();
       window.__strlIsDirty = false;
     };
