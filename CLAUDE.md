@@ -1,5 +1,11 @@
 # CLAUDE.md
 
+> **STRL-Ideate fork.** This repo is a downstream, local-first fork of Excalidraw
+> rebranded as STRL-Ideate (collaboration/AI/backend stripped, + an Electron
+> desktop app). **Every divergence from upstream is documented in
+> [docs/STRL-CUSTOMIZATIONS.md](docs/STRL-CUSTOMIZATIONS.md)** — read it before
+> editing or syncing upstream. Customizations are marked in code with `// STRL:`.
+
 ## Project Structure
 
 Excalidraw is a **monorepo** with a clear separation between the core library and the application:
