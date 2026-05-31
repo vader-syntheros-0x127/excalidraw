@@ -1053,8 +1053,10 @@ Per the supply-chain gate, a Snyk SCA+SAST pass (org `syntheros`) over the AI wo
 | `mermaid`→11.15.0 | Arbitrary Code Injection (med) | **on the AI panel's LLM→mermaid path** |
 | `ajv@8`→8.18.0 | ReDoS (high) | MCP SDK runtime. Scoped to `@8` — a blanket `ajv` override breaks electron-builder's `@develar/schema-utils` (needs ajv 6.x) |
 | `fast-uri`→3.1.2, `qs`→6.15.2 | traversal / DoS (high) | MCP SDK transitive |
+| `brace-expansion@1`→1.1.13, `minimatch@5`→5.1.8, `picomatch@2`→2.3.2, `postcss`→8.5.10, `rollup`→4.59.0 | ReDoS / traversal / XSS (build tooling) | scoped by major; all within-major patches |
+| `nanoid`→5.0.9, `uuid`→11.1.1 | Improper Input Validation (med) | `nanoid` is a 4→5 major (no 4.x fix); verified it didn't break the engine/renderer |
 
-Remaining Snyk highs are **build-tooling only** (`vite`, `rollup`, `minimatch`, `picomatch`, `brace-expansion`) — exploitable only at build time with untrusted input, out of scope for a local-first app built from trusted source. Re-verified after overrides: typecheck, all 5 node smokes, renderer + AppImage builds, boot smoke, CDP 6/6 — nothing broke.
+This took the tree from **63 → 12** Snyk findings. **The remaining 12 are all `vite@5.0.12`** (dev server / build tool — exploited only at build time with trusted local input). **`vite` is deliberately NOT bumped:** 5.4.x pulls a nested `esbuild@0.21.5` whose native binary fails to validate under the hoisted `node_modules` linker (build breaks with `service was stopped: EPIPE`), and fully clearing it needs a `vite@6` major. Tried 5.4.21, hit the toolchain break, reverted — `rollup@4.59.0` and the rest stayed. Re-verified after every override pass: typecheck, all 5 node smokes, renderer + AppImage builds, boot smoke, CDP 6/6 — nothing broke.
 
 ### 13.10 Held / deferred (AI)
 
