@@ -307,6 +307,29 @@ async function launchA(dir) {
       dirty && green.hits < 50 && magentaStill.hits > 100 && stillDirty,
       `dirtyBefore=${dirty} greenHits=${green.hits} magentaKept=${magentaStill.hits} stillDirty=${stillDirty}`,
     );
+
+    // 3) SECURITY: a compromised renderer must NOT be able to redirect the
+    // in-place Save target to an arbitrary path it picks. Attempt the exploit:
+    // claim an existing non-issued file as "opened", then in-place-save attacker
+    // bytes. With the strl:opened allowlist, confirmOpened() is ignored, the
+    // active file stays = the legitimately-opened scene, and the sentinel is
+    // never written. (Pre-fix, this overwrote the sentinel with 'PWNED-STRL'.)
+    const sentinel = path.join(dir, "sentinel.secret");
+    fs.writeFileSync(sentinel, "SENTINEL");
+    await cdp.evaluate(`window.strlDesktop.confirmOpened(${JSON.stringify(sentinel)})`);
+    await sleep(400);
+    await cdp.evaluate(
+      `window.strlDesktop.saveFile({data:'PWNED-STRL',suggestedName:'x',extension:'excalidraw',saveAs:false})`,
+    );
+    await sleep(700);
+    const sentinelAfter = fs.readFileSync(sentinel, "utf8");
+    record(
+      "renderer canNOT redirect Save target to an arbitrary path (strl:opened allowlist)",
+      sentinelAfter === "SENTINEL",
+      sentinelAfter === "SENTINEL"
+        ? "sentinel intact (exploit blocked)"
+        : `SENTINEL OVERWRITTEN -> ${JSON.stringify(sentinelAfter.slice(0, 24))}`,
+    );
   } finally {
     if (cdp) try { cdp.ws.close(); } catch {}
     kill(proc);

@@ -65,6 +65,9 @@ const isValidOrigin = (value: unknown): value is string => {
     const url = new URL(value);
     return (
       (url.protocol === "http:" || url.protocol === "https:") &&
+      // STRL: reject wildcard/multi-host hostnames (e.g. https://*.evil.com),
+      // which would broaden the CSP connect-src/img-src to an entire domain tree.
+      !url.hostname.includes("*") &&
       url.origin === value
     );
   } catch {
@@ -650,6 +653,11 @@ const openFileViaDialog = async () => {
 // Max size for an opened scene file (defensive cap).
 const MAX_SCENE_BYTES = 50 * 1024 * 1024;
 
+// STRL: paths main itself has issued to the renderer to open (via strl:open-file).
+// strl:opened is only honoured for a path in this set, so a compromised renderer
+// cannot redirect the in-place Save target (activeFilePath) to an arbitrary path.
+const sceneOpenPaths = new Set<string>();
+
 const openFilePath = (filePath: string) => {
   const resolved = path.resolve(filePath);
   // Buffer until the renderer has registered its open handler, otherwise the
@@ -669,6 +677,9 @@ const openFilePath = (filePath: string) => {
       return;
     }
     const contents = fs.readFileSync(resolved, "utf8");
+    // STRL: record this as a main-issued open so the renderer's strl:opened echo
+    // can be validated against it (the renderer must not choose the Save target).
+    sceneOpenPaths.add(resolved);
     // NOTE: the active file is set only after the renderer confirms a
     // successful load (see the "strl:opened" handler), so a failed/corrupt
     // open can never make the next Save overwrite a good file with an empty
@@ -919,7 +930,15 @@ ipcMain.on("strl:open-recent", (_event, filePath: string) => {
 // active document (title + Save target + recent files).
 ipcMain.on("strl:opened", (_event, openedPath: string) => {
   if (typeof openedPath === "string") {
-    setActiveFile(openedPath);
+    // STRL: only adopt a path main itself issued for opening (mirrors the
+    // strl:open-recent allowlist above). Without this, a compromised renderer
+    // could confirmOpened() an arbitrary existing path and make the next
+    // in-place Save silently overwrite it with attacker-controlled bytes
+    // (e.g. ~/.bashrc) — a sandbox-escape-grade arbitrary file write.
+    const resolved = path.resolve(openedPath);
+    if (sceneOpenPaths.has(resolved)) {
+      setActiveFile(resolved);
+    }
   }
 });
 

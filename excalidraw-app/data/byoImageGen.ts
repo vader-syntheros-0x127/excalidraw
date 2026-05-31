@@ -40,6 +40,13 @@ export const generateImage = async ({
   size,
   signal,
 }: ByoImageOptions): Promise<GeneratedImage> => {
+  // STRL: only ever fetch an http(s) endpoint — never file:/data:/etc.
+  if (!/^https?:\/\//i.test(endpoint)) {
+    throw new RequestError({
+      message: "Image endpoint must be an http(s) URL.",
+      status: 0,
+    });
+  }
   const response = await fetch(endpoint, {
     method: "POST",
     signal,

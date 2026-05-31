@@ -47,6 +47,16 @@ export const byoStreamFetch = async ({
   onStreamCreated,
   signal,
 }: ByoStreamOptions): Promise<TTTDDialog.OnTextSubmitRetValue> => {
+  // STRL: only ever fetch an http(s) endpoint — never file:/data:/etc. (the web
+  // build has no CSP to fall back on; on desktop the CSP allowlist is http(s)-only).
+  if (!/^https?:\/\//i.test(endpoint)) {
+    return {
+      error: new RequestError({
+        message: "AI endpoint must be an http(s) URL.",
+        status: 0,
+      }),
+    };
+  }
   try {
     const response = await fetch(endpoint, {
       method: "POST",
