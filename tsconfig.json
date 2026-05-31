@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -34,12 +34,5 @@
     }
   },
   "include": ["packages", "excalidraw-app"],
-  "exclude": [
-    "examples",
-    "dist",
-    "types",
-    "tests",
-    "packages/strl-authoring",
-    "packages/strl-mcp-server"
-  ]
+  "exclude": ["examples", "dist", "**/build", "types", "tests", "packages/strl-authoring", "packages/strl-mcp-server"]
 }
