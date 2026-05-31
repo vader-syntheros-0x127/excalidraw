@@ -30,6 +30,7 @@
 10. [Build & run quick-reference](#10-build--run-quick-reference)
 11. [Held / deferred items](#11-held--deferred-items)
 12. [Maintenance playbook](#12-maintenance-playbook)
+13. [AI authoring — MCP server + in-app panel](#13-ai-authoring--mcp-server--in-app-panel)
 
 ---
 
@@ -908,3 +909,137 @@ The three `sha256-…` hashes in `desktop/src/main.ts:35–49` are over the **po
 3. **Renderer types** (`excalidraw-app/strl-desktop.d.ts`): add the method to the `Window.strlDesktop?` interface (the app can't import from the desktop workspace, so types are duplicated).
 4. **Renderer consumer** (`excalidraw-app/useDesktopIntegration.ts`): register the handler **before** `desktop.ready()` so it's live when main flushes buffered events.
 5. Update the **IPC contract table** in §9 of this doc.
+
+---
+
+## 13. AI authoring — MCP server + in-app panel
+
+Lets AI tools and LLMs **draw diagrams, edit existing ones, and embed images** in
+STRL-Ideate, while keeping the fork local-first (no phone-home by default, strict
+desktop CSP). Three independent pieces, built in this order. Commits: `d0cba236`
+(engine + MCP), `a3864b5b` (live-reload), `a79a81a2` (in-app panel + CSP).
+
+### 13.1 The make-or-break insight (headless scene building)
+
+`convertToExcalidrawElements` / `restoreElements` are DOM-free **except** for text
+measurement, whose only DOM path is `CanvasTextMetricsProvider`
+(`packages/element/src/textMeasurements.ts:121`, `document.createElement("canvas")`),
+constructed lazily only when no provider is set. The library already exposes
+`setCustomTextMetricsProvider()` (`:113`, re-exported at `packages/excalidraw/index.tsx:412`).
+We register a pure-Node provider → the whole transform/restore path runs under bare
+`node`. Text **height** is exact (FONT_METADATA); **width** is approximate but
+deterministic and self-heals when the app re-measures on load.
+
+### 13.2 `packages/strl-authoring` — the engine (`@strl/authoring`)
+
+DOM-free **and** node-free (so it typechecks under the root config like any internal
+package). New pnpm workspace package; **zero new external runtime deps**.
+
+| File | Role |
+|---|---|
+| `src/textMetrics.ts` | `registerNodeTextMetrics()` — the keystone; registers the pure-Node advance-width provider (idempotent). MUST run before any convert/restore. |
+| `src/scene.ts` | `createScene` / `addShapes` / `addImage` / `editElements` / `deleteElements` / `getSceneSummary`. Reuses `convertToExcalidrawElements`. |
+| `src/io.ts` | `serializeScene` (reproduces `serializeAsJSON(...,'local')` from light parts — importing `data/json.ts` would drag the browser render/export graph in) and `parseSceneFile` (`restoreElements`, NOT browser-only `loadFromBlob`). |
+| `src/files.ts` | `binaryFileFromDataURL` — pure data-URL → `BinaryFileData`. |
+
+Built by `build.mjs` (esbuild, `platform:node`) via the shared
+`scripts/strl-esbuild-node.mjs`, which: aliases `@excalidraw/*` and `@strl/authoring`
+to source; empty-loads font/css/image assets (the engine needs font *metadata*, not
+binaries); and banners a few module-eval browser-global stubs (`devicePixelRatio=1`,
+and `window` *declared* `undefined` so defensive `window?.x` guards don't
+ReferenceError while `typeof window === "undefined"` stays true → headless branch).
+Verify: `node smoke.mjs` (7 elements, stable round-trip, `domAbsent:true`).
+
+### 13.3 `packages/strl-mcp-server` — the MCP server (`@strl/mcp-server`)
+
+Standalone stdio MCP server (low-level `@modelcontextprotocol/sdk@1.29.0`, JSON-Schema
+tools — no zod authoring). The **one** new external dep; installed
+`--ignore-scripts` under Aikido Safe Chain, Snyk-scanned (`--org=syntheros`).
+
+- **Tools:** `create_scene`, `add_shapes`, `add_image`, `edit_elements`,
+  `delete_elements`, `get_scene`, and opt-in `generate_image`.
+- **Sandbox:** every target resolved under `STRL_MCP_WORKDIR` with a path-traversal
+  guard (`path.relative` → reject `..`/absolute) + `.excalidraw` ext + 50 MB cap.
+  Writes are **atomic** (temp + `fs.rename`) so a watcher only ever sees a whole file.
+- **Env:** `STRL_MCP_WORKDIR` (required sandbox root), `STRL_MCP_ACTIVE_FILE` (default
+  target), `STRL_MCP_IMAGE_ENDPOINT`/`_MODEL`/`_KEY`/`_SIZE` (opt-in image gen; absent
+  ⇒ `generate_image` returns disabled — **no default endpoint, no phone-home**).
+- **Run** (register in a client's `mcpServers`):
+  `{ "command": "node", "args": ["/abs/.../packages/strl-mcp-server/dist/bin.js"],
+     "env": { "STRL_MCP_WORKDIR": "/abs/sketches", "STRL_MCP_ACTIVE_FILE": "scene.excalidraw" } }`.
+- Verify: `node mcp-smoke.mjs` (drives the bin over real JSON-RPC stdio: 7 tools,
+  create/edit/add_image, path-traversal rejected, on-disk file valid).
+
+**Build/typecheck note:** both Node packages are **excluded from the root `tsc`**
+(`tsconfig.json` `exclude`) because they use node built-ins; each has its own
+`tsconfig.json` (`types:["node"]` + `@excalidraw/*` paths + a `global.d.ts` mirroring
+`@excalidraw/excalidraw/global` + `/css`). The engine emits no published `dist` to git
+(gitignored); build with `node build.mjs` before running.
+
+### 13.4 Desktop live-reload (`a3864b5b`)
+
+When an external tool rewrites the active `.excalidraw`, the desktop app reloads it
+live — **channel is the filesystem, no network port, CSP untouched.**
+
+- `desktop/src/main.ts`: `fs.watch` on the active file's **parent directory**
+  (survives atomic-rename inode replacement), basename filter, 150 ms debounce
+  (`startWatching`/`stopWatching`, driven from the `setActiveFile` chokepoint;
+  disposed on window `closed` / `window-all-closed`).
+- **Self-write guard:** the app now saves **atomically** and records
+  `lastWrittenHash = sha256(bytes)` before writing, so the watcher ignores its own
+  saves by content — **no time window**, so an external change is never masked by a
+  recent save.
+- **Conflict policy** (`handleExternalChange`): clean scene → `strl:external-change`
+  (silent reload); dirty scene → native Reload/Keep-mine prompt (never clobbers);
+  deleted-on-disk → `strl:external-removed` toast, scene kept.
+- Renderer (`useDesktopIntegration.ts`) factors `applyScene()`
+  (`loadFromBlob → updateScene → addFiles → markSaved`) so a reload resets the dirty
+  baseline. Verify the mechanism: `node desktop/watch-smoke.mjs`.
+
+### 13.5 In-app AI panel (BYO LLM) + CSP allowlist (`a79a81a2`)
+
+Revives the surviving `TTDDialog` text-to-diagram pipeline as a local-first,
+bring-your-own-model feature (web + desktop). **AI is OFF until configured.**
+
+- `excalidraw-app/data/aiSettings.ts` — localStorage config (endpoint, key, model,
+  optional image endpoint/model). `isAiConfigured()` gates everything. On desktop,
+  saving derives `new URL(endpoint).origin` and calls `strlDesktop.setAiOrigins()`.
+- `excalidraw-app/data/byoStreamFetch.ts` — **standard OpenAI** `chat/completions` SSE
+  parser returning the `OnTextSubmitRetValue` contract. *(The library's
+  `TTDStreamFetch` speaks a bespoke hosted-backend SSE shape and would silently fail —
+  do NOT reuse it for BYO endpoints.)* System prompt asks for ONLY a Mermaid diagram;
+  ```` ```mermaid ```` fences stripped defensively.
+- `AIComponents.tsx` renders `<TTDDialog onTextSubmit persistenceAdapter={TTDIndexedDBAdapter}>`;
+  `AISettingsDialog.tsx` is the config UI (Menu → **AI settings**, `brainIcon`).
+  `App.tsx` renders both inside `<Excalidraw>` and passes `aiEnabled={isAiConfigured()}`
+  (false hides the trigger/commands; the host `<TTDDialog>` supersedes LayerUI's
+  `__fallback` via `withInternalFallback`).
+- **Desktop CSP is now settings-driven** (`main.ts` `buildCSP(aiOrigins)` replaced the
+  const): default strict (`connect-src 'self' data: blob:`); when AI is enabled, ONLY
+  the configured origin(s) are appended to `connect-src`/`img-src`. `strl:set-ai-origins`
+  validates http(s) origins, persists them (`ai-origins.json` in userData), and reloads
+  the window so the new document CSP applies (scene restores from localStorage). **The
+  three inline-script sha256 hashes are unchanged** (§12.3 / STRL_SMOKE stays valid).
+
+Verify: `pnpm test:typecheck` + `pnpm -C desktop build:main` + `pnpm -C excalidraw-app build`
++ eslint. The live chat→LLM→Mermaid→insert flow needs a running model to exercise
+end-to-end; it's contract-matched against the intact library pipeline.
+
+### 13.6 New IPC channels (extends §9)
+
+| Channel | Dir | Payload | Purpose |
+|---|---|---|---|
+| `strl:external-change` | main→renderer | `{name, contents, path}` | live reload of the active file (clean, or user chose Reload) |
+| `strl:external-removed` | main→renderer | `{name}` | active file deleted/renamed on disk → toast, scene kept |
+| `strl:set-ai-origins` | renderer→main | `string[]` | set the CSP AI-endpoint allowlist (validated, persisted, window reload) |
+
+### 13.7 Held / deferred (AI)
+
+- In-app **AI image-generation UI** (a button/command): the engine + MCP `generate_image`
+  cover it for the external-tool path; the in-app trigger is a follow-up
+  (`aiSettings.isImageGenConfigured()` + `byoImageGen` are scaffolded for it).
+- Chat-driven **edit-existing depth** beyond regenerate-and-insert.
+- Spawning the MCP server **from the Electron main process** (self-advertising desktop
+  target) — v1 ships the server as a standalone node bin.
+- OS keychain for the API key (currently localStorage; sent only to the configured,
+  CSP-gated origin).
