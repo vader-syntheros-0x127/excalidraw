@@ -23,31 +23,54 @@ import type { MenuItemConstructorOptions } from "electron";
 const APP_NAME = "STRL-Ideate";
 const APP_SCHEME = "app";
 
-// STRL: strict Content-Security-Policy for the packaged app, served on the
-// app:// HTML document. Everything loads from the app's own origin ('self') —
-// the desktop build bundles its fonts locally (see woff2-vite-plugins.js /
-// .env.desktop), so there are no remote origins to allow.
+// STRL: Content-Security-Policy for the packaged app, served on the app:// HTML
+// document. The DEFAULT is strict — everything loads from the app's own origin
+// ('self'); the desktop build bundles its fonts locally so there are no remote
+// origins to allow (no phone-home). When the user configures a BYO AI endpoint
+// (Menu → AI settings), ONLY that origin is added to connect-src/img-src (and
+// persisted), so the strict default is preserved until the user opts in.
 //  - 'wasm-unsafe-eval': pica/image-blob-reduce compile WASM for image resize.
 //  - style 'unsafe-inline': excalidraw relies heavily on inline styles.
 //  - the three script hashes are the inline <script>s in index.html
 //    (dark-mode early paint, local asset-path, window.name). If those change,
 //    recompute (sha256 base64 of each inline script body) or the CSP blocks them
 //    — the STRL_SMOKE check (dark:true / hasEditor:true) will catch a mismatch.
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "base-uri 'none'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-  "form-action 'none'",
-  "script-src 'self' 'wasm-unsafe-eval' 'sha256-iPtxE0n242JUcLKPr7D09tSIF4FKNSy5jqkeySXxfDY=' 'sha256-mXvmZWZG6iAZBw0OliHQaJOSMPc9DbQZJaxywImBlQo=' 'sha256-Kxm9zQ99NqYtDuNSdByEfyFAYVPAqWdmNFx5axumk1w='",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self' data: blob:",
-  "worker-src 'self' blob:",
-  "media-src 'self' blob:",
-  "manifest-src 'self'",
-].join("; ");
+const buildCSP = (aiOrigins: string[]): string => {
+  const extra = aiOrigins.length > 0 ? ` ${aiOrigins.join(" ")}` : "";
+  return [
+    "default-src 'self'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'none'",
+    "script-src 'self' 'wasm-unsafe-eval' 'sha256-iPtxE0n242JUcLKPr7D09tSIF4FKNSy5jqkeySXxfDY=' 'sha256-mXvmZWZG6iAZBw0OliHQaJOSMPc9DbQZJaxywImBlQo=' 'sha256-Kxm9zQ99NqYtDuNSdByEfyFAYVPAqWdmNFx5axumk1w='",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob:${extra}`,
+    "font-src 'self' data:",
+    `connect-src 'self' data: blob:${extra}`,
+    "worker-src 'self' blob:",
+    "media-src 'self' blob:",
+    "manifest-src 'self'",
+  ].join("; ");
+};
+
+// http(s) origins the user has allowed for AI endpoints (empty = strict default).
+let aiOrigins: string[] = [];
+
+const isValidOrigin = (value: unknown): value is string => {
+  if (typeof value !== "string") {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.origin === value
+    );
+  } catch {
+    return false;
+  }
+};
 // When set (dev), load the live Vite dev server instead of the built files.
 const DEV_URL = process.env.STRL_DESKTOP_DEV_URL;
 // Built SPA location:
@@ -102,6 +125,27 @@ const saveWindowState = (win: BrowserWindow) => {
   const state: WindowState = { ...bounds, isMaximized: win.isMaximized() };
   try {
     fs.writeFileSync(stateFilePath(), JSON.stringify(state));
+  } catch {
+    // best-effort only
+  }
+};
+
+// STRL: persist the AI-endpoint CSP allowlist so it survives relaunch.
+const aiOriginsFilePath = () =>
+  path.join(app.getPath("userData"), "ai-origins.json");
+
+const loadAiOrigins = () => {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(aiOriginsFilePath(), "utf8"));
+    aiOrigins = Array.isArray(parsed) ? parsed.filter(isValidOrigin) : [];
+  } catch {
+    aiOrigins = [];
+  }
+};
+
+const persistAiOrigins = () => {
+  try {
+    fs.writeFileSync(aiOriginsFilePath(), JSON.stringify(aiOrigins));
   } catch {
     // best-effort only
   }
@@ -169,9 +213,10 @@ const registerAppProtocol = () => {
     if (target !== indexHtml) {
       return response;
     }
-    // Inject the CSP onto the HTML document, keeping the streamed body.
+    // Inject the CSP onto the HTML document, keeping the streamed body. Built
+    // from the persisted AI origins (strict by default).
     const headers = new Headers(response.headers);
-    headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+    headers.set("Content-Security-Policy", buildCSP(aiOrigins));
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -878,6 +923,23 @@ ipcMain.on("strl:opened", (_event, openedPath: string) => {
   }
 });
 
+// STRL: the renderer reports which AI-endpoint origins to allow in the CSP (from
+// AI settings). We validate, persist, and reload the window so the new document
+// CSP takes effect (the scene restores from localStorage). Empty = strict.
+ipcMain.on("strl:set-ai-origins", (_event, origins: unknown) => {
+  const next = Array.from(
+    new Set((Array.isArray(origins) ? origins : []).filter(isValidOrigin)),
+  );
+  if (JSON.stringify(next) === JSON.stringify(aiOrigins)) {
+    return; // no change → no disruptive reload
+  }
+  aiOrigins = next;
+  persistAiOrigins();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.reload();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // File-association / CLI handling
 // ---------------------------------------------------------------------------
@@ -913,6 +975,7 @@ if (!gotLock) {
   takeFileFromArgv(process.argv);
 
   app.whenReady().then(() => {
+    loadAiOrigins(); // STRL: seed the CSP allowlist before the first document load
     registerAppProtocol();
     loadRecentFiles();
     buildMenu();

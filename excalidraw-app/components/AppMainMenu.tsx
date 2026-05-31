@@ -1,4 +1,4 @@
-import { eyeIcon } from "@excalidraw/excalidraw/components/icons";
+import { brainIcon, eyeIcon } from "@excalidraw/excalidraw/components/icons";
 import { MainMenu } from "@excalidraw/excalidraw/index";
 import React from "react";
 
@@ -14,6 +14,8 @@ export const AppMainMenu: React.FC<{
   theme: Theme | "system";
   setTheme: (theme: Theme | "system") => void;
   refresh: () => void;
+  // STRL: open the BYO AI configuration dialog.
+  onOpenAISettings: () => void;
 }> = React.memo((props) => {
   // STRL: on desktop, Open/Save go through the native File menu (Ctrl+O / Ctrl+S
   // → strl IPC), which tracks the active file and unsaved state. Hide the
@@ -30,6 +32,9 @@ export const AppMainMenu: React.FC<{
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       {/* STRL: removed <MainMenu.DefaultItems.Socials /> — no Excalidraw community links */}
+      <MainMenu.Item icon={brainIcon} onSelect={props.onOpenAISettings}>
+        AI settings…
+      </MainMenu.Item>
       {isDevEnv() && (
         <MainMenu.Item
           icon={eyeIcon}

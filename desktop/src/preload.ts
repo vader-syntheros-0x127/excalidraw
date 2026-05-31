@@ -64,6 +64,8 @@ export type StrlDesktopApi = {
   ) => () => void;
   /** Subscribe to the active file being deleted/renamed away on disk. */
   onExternalRemoved: (handler: (info: { name: string }) => void) => () => void;
+  /** Set the http(s) origins the CSP should allow for AI endpoints (empty = strict). */
+  setAiOrigins: (origins: string[]) => void;
 };
 
 const api: StrlDesktopApi = {
@@ -114,6 +116,7 @@ const api: StrlDesktopApi = {
     ipcRenderer.on("strl:external-removed", listener);
     return () => ipcRenderer.removeListener("strl:external-removed", listener);
   },
+  setAiOrigins: (origins) => ipcRenderer.send("strl:set-ai-origins", origins),
 };
 
 contextBridge.exposeInMainWorld("strlDesktop", api);

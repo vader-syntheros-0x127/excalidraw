@@ -40,6 +40,11 @@ interface StrlDesktopApi {
     handler: (file: { name: string; contents: string; path: string }) => void,
   ) => () => void;
   onExternalRemoved: (handler: (info: { name: string }) => void) => () => void;
+  /**
+   * STRL: set the http(s) origins the desktop CSP should allow for AI endpoints
+   * (default: none → strict). Persisted; the window reloads so the new CSP applies.
+   */
+  setAiOrigins: (origins: string[]) => void;
 }
 
 interface Window {
