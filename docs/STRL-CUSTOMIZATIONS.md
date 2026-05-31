@@ -1056,7 +1056,17 @@ Per the supply-chain gate, a Snyk SCA+SAST pass (org `syntheros`) over the AI wo
 | `brace-expansion@1`→1.1.13, `minimatch@5`→5.1.8, `picomatch@2`→2.3.2, `postcss`→8.5.10, `rollup`→4.59.0 | ReDoS / traversal / XSS (build tooling) | scoped by major; all within-major patches |
 | `nanoid`→5.0.9, `uuid`→11.1.1 | Improper Input Validation (med) | `nanoid` is a 4→5 major (no 4.x fix); verified it didn't break the engine/renderer |
 
-This took the tree from **63 → 12** Snyk findings. **The remaining 12 are all `vite@5.0.12`** (dev server / build tool — exploited only at build time with trusted local input). **`vite` is deliberately NOT bumped:** 5.4.x pulls a nested `esbuild@0.21.5` whose native binary fails to validate under the hoisted `node_modules` linker (build breaks with `service was stopped: EPIPE`), and fully clearing it needs a `vite@6` major. Tried 5.4.21, hit the toolchain break, reverted — `rollup@4.59.0` and the rest stayed. Re-verified after every override pass: typecheck, all 5 node smokes, renderer + AppImage builds, boot smoke, CDP 6/6 — nothing broke.
+The last findings were all `vite@5.0.12` (dev server / build tool). These were cleared with a **vite 5 → 6 major upgrade** — three devDep bumps, no `vite.config.mts` change needed:
+
+- `vite` 5.0.12 → **6.4.2** (clears every vite CVE; 6.4.2 is the lowest that fixes CVE-2026-39365).
+- `@vitejs/plugin-react` 3.1.0 → **4.7.0** (3.x peers cap at vite 5; 4.7.0 supports vite 4–7).
+- `vite-plugin-svgr` 4.2.0 → **5.2.0** (4.2.0 peers cap at vite 5).
+- Dropped the `vite-plugin-html>vite` override (the plugin's peer is `>=2.0.0`, vite-6-safe).
+- `vite-plugin-checker@0.7.2`, `vite-plugin-pwa@0.21.1`, `vite-plugin-ejs@1.7.0`, `vitest@3.0.6` already declared vite-6 peers — no bump needed.
+
+**Toolchain gotcha (the EPIPE):** vite 6 needs `esbuild@0.25.x`, but `esbuild-sass-plugin@2.16.0` (library build) + the size-limit/webpack tooling pin `esbuild@0.19.x`. Two esbuild majors under `node-linker=hoisted` makes vite's esbuild load the wrong hoisted binary (`Host version "0.25.12" does not match binary version "0.19.12"`). Fixed by pinning a single esbuild via `pnpm.overrides` (`"esbuild": "0.25.12"`) so the hoisted binary matches, and by installing **without** `--ignore-scripts` (pnpm 10's `onlyBuiltDependencies` already gates lifecycle scripts to exactly `[esbuild, electron]`, so esbuild's postinstall builds the binary correctly while nothing else runs). An earlier vite 5.4.21 attempt hit the same wall and was reverted; vite 6 + the esbuild pin is the real fix.
+
+This took the tree from **63 → 0** Snyk findings. Re-verified: typecheck, all 5 node smokes (esbuild 0.25), renderer + AppImage builds, boot smoke, CDP 6/6, and `vitest` (vite 6 + vitest 3.0.6, 29/29 on the math suite). `build:packages` (the library-publish path, unused by the app) is pre-existing-broken on its `yarn gen:types` step — a yarn→pnpm-migration leftover, unrelated to this.
 
 ### 13.10 Held / deferred (AI)
 
