@@ -3,16 +3,18 @@
 **STRL-Ideate** is a downstream fork of [`excalidraw/excalidraw`](https://github.com/excalidraw/excalidraw), rebranded and re-engineered to be **local-first**: the entire backend/cloud surface (real-time collaboration, Firebase, the AI text-to-diagram backend, Sentry telemetry, and the Excalidraw+ upsell) has been stripped out, the visible identity has been rebranded to "STRL-Ideate" with a generated sparkle logo and dark-mode-by-default, a first-class PNG/SVG/PDF export pipeline has been added, and a net-new Electron **desktop app** (`desktop/` workspace) wraps the editor with a real desktop document model. This document is the single source of truth for **everything that diverges from upstream** — read it before any upstream sync, brand-asset regeneration, or feature work on the fork.
 
 ### What this app **is**
+
 - A **local-first** whiteboard. A scene lives only in `localStorage` (scene JSON + app state) and IndexedDB (image blobs). No account, no cloud, no telemetry.
 - A web SPA (`excalidraw-app/`, served as a PWA) **and** a packaged Electron desktop app (`desktop/`) sharing the same renderer.
 - An exact-pinned, supply-chain-hardened pnpm monorepo (migrated off yarn 1).
 
 ### What this app **is not**
+
 - It has **no collaboration** — `collab/`, `share/`, `data/firebase.ts`, and `data/index.ts` are deleted (not stubbed). Room/`#json=` links no longer resolve.
 - It has **no Excalidraw+ / cloud export**, **no Sentry**, **no AI/TTD dialog**, and **no excalidraw.com backend identifiers** baked into any build (all `VITE_APP_*` backend env vars are emptied).
 - The desktop build makes **no network calls at all** — fonts are bundled locally and a strict `app://` CSP blocks any remote origin.
 
-> **Audit-trail convention.** Every divergence from upstream is marked **twice** so it survives merges and greps cleanly: (1) a `// STRL:` / `# STRL:` code comment immediately above the change explaining *why*, and (2) a commit subject that starts with `STRL:`. Recover the full list with `git log --oneline --grep="STRL"`.
+> **Audit-trail convention.** Every divergence from upstream is marked **twice** so it survives merges and greps cleanly: (1) a `// STRL:` / `# STRL:` code comment immediately above the change explaining _why_, and (2) a commit subject that starts with `STRL:`. Recover the full list with `git log --oneline --grep="STRL"`.
 
 ---
 
@@ -41,7 +43,7 @@ STRL-Ideate is a **downstream fork** of `excalidraw/excalidraw`, rebranded and m
 ### Remotes (`git remote -v`)
 
 | Remote | URL | Push |
-|---|---|---|
+| --- | --- | --- |
 | `origin` | `https://github.com/vader-syntheros-0x127/excalidraw.git` | enabled (the STRL fork) |
 | `upstream` | `https://github.com/excalidraw/excalidraw.git` (fetch) | **`DISABLE_PUSH_TO_UPSTREAM`** — the push URL is deliberately a bogus string so an accidental `git push upstream` fails fast |
 
@@ -57,7 +59,7 @@ STRL-Ideate is a **downstream fork** of `excalidraw/excalidraw`, rebranded and m
 Every divergence is tagged two ways (see the convention note above): an in-code `// STRL:` comment and a `STRL:`-prefixed commit subject. The **24 STRL commits** at time of writing (newest first) span branding, stripping collab/AI/Sentry/Plus, the desktop app, the supply-chain CI, and the yarn→pnpm migration. Key anchor commits:
 
 | Commit | Subject |
-|---|---|
+| --- | --- |
 | `76063b85` | de-duplicate export dispatch via `sceneToExportBytes` (#9) |
 | `14187b79` | stream `app://` assets via `net.fetch` instead of `readFileSync` (#7) |
 | `c91641bc` | fix desktop document-model review findings (#1–#6, #8, #10) |
@@ -86,7 +88,7 @@ Every divergence is tagged two ways (see the convention note above): an in-code 
 ### Merge-risk map (where to prefer making changes)
 
 | Area | Upstream counterpart | Merge risk | Guidance |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `excalidraw-app/` | the SPA (web + desktop renderer) | **Low** | edit freely; this is where most STRL edits live |
 | `packages/*` | the published `@excalidraw/*` **library** | **Higher** | minimize edits; keep them `STRL:`-marked and surgical — upstream rewrites these often |
 | `desktop/` | **none** (net-new STRL workspace) | **Zero** | no upstream counterpart, so no conflicts |
@@ -128,7 +130,7 @@ minimum-release-age=1440        # refuse deps published < 24h ago (anti-malware)
 ```yaml
 packages:
   - "excalidraw-app"
-  - "desktop"        # NEW STRL workspace
+  - "desktop" # NEW STRL workspace
   - "packages/*"
 ```
 
@@ -162,6 +164,7 @@ packages:
 STRL-Ideate gutted Excalidraw's entire backend/cloud surface and rebuilt the app shell to be **local-first**: a scene lives only in `localStorage` + IndexedDB (for image blobs), with no Firebase, no socket.io real-time collaboration, no Sentry telemetry, and no Excalidraw+ upsell. This was done across four commits, **all in `excalidraw-app/`** (the SPA, low merge-risk) — the library `packages/*` were **not** touched by this work.
 
 **Commit map (newest → oldest):**
+
 - `c91641bc` (desktop document-model review fixes) — the relevant one here is **#6**, the `#url=` hashchange image-load fix in `App.tsx`.
 - `1f9d9e45` — **the big strip**: deletes `collab/`, `share/`, `AI.tsx`, `data/firebase.ts`, `data/index.ts`, `tests/collab.test.tsx`; rewrites `initializeScene`/`loadImages`/effects in `App.tsx`; removes deps `firebase`, `socket.io-client`, `@excalidraw/random-username`.
 - `60c961ca` — **cleanup**: removes Sentry (`sentry.ts`, `TopErrorBoundary` usage, `index.tsx` import), drops sourcemaps, deletes marketing/SEO assets, and deletes `examples/`, `dev-docs/`, `firebase-project/`.
@@ -173,6 +176,7 @@ STRL-Ideate gutted Excalidraw's entire backend/cloud surface and rebuilt the app
 Verified **gone** from the tree (`git ls-files` confirms none are tracked at HEAD):
 
 **Collaboration stack** (`1f9d9e45`):
+
 - `excalidraw-app/collab/Collab.tsx` (1051 lines), `Portal.tsx` (257), `CollabError.tsx` (55), `CollabError.scss` (35) — the entire real-time-collab engine (socket.io rooms, pointer broadcast, element reconciliation, presence).
 - `excalidraw-app/share/ShareDialog.{tsx,scss}`, `QRCode.tsx`, `qrcode.chunk.ts` — shareable-link / room-invite UI.
 - `excalidraw-app/data/firebase.ts` (319) — Firebase scene + file storage.
@@ -180,46 +184,57 @@ Verified **gone** from the tree (`git ls-files` confirms none are tracked at HEA
 - `excalidraw-app/tests/collab.test.tsx` (252).
 
 **AI** (`1f9d9e45`):
+
 - `excalidraw-app/components/AI.tsx` (120) — the text-to-diagram (TTD) dialog wiring.
 
 **Sentry** (`60c961ca`):
+
 - `excalidraw-app/sentry.ts` deleted; its import dropped from `index.tsx`; `@sentry/browser` usage removed from `TopErrorBoundary.tsx`.
 
 **Excalidraw+ / cloud** (`93c2969b`):
+
 - `excalidraw-app/ExcalidrawPlusIframeExport.tsx` (224), `components/ExportToExcalidrawPlus.tsx` (135), `components/ExcalidrawPlusPromoBanner.tsx` (22), `components/AppSidebar.{tsx,scss}`.
 
 **De-bloat** (`60c961ca`):
-- `dev-docs/` (entire Docusaurus site, incl. its 9279-line `yarn.lock`), `firebase-project/`, and `examples/` — the commit message notes `examples/` was *"the source of the critical next CVE + mermaid-XSS audit noise."*
+
+- `dev-docs/` (entire Docusaurus site, incl. its 9279-line `yarn.lock`), `firebase-project/`, and `examples/` — the commit message notes `examples/` was _"the source of the critical next CVE + mermaid-XSS audit noise."_
 - Marketing/SEO assets bundled into the app: `og-image-3.png`, `robots.txt`, `screenshots/`, `oss_promo_*`, leftover `public/service-worker.js`.
 - vite `sourcemap: false` (stopped shipping ~59 `.map` files).
 
 **Dependencies removed:**
+
 - `excalidraw-app/package.json` (`1f9d9e45`): `firebase@11.3.1`, `socket.io-client@4.7.2`, `@excalidraw/random-username@1.0.0`.
 - root `package.json` (`90dc3980`): `@types/socket.io-client`; monorepo renamed `excalidraw-monorepo` → `strl-ideate-monorepo`.
 
-**Why:** attack-surface + bundle reduction. `1f9d9e45` records collab/backend were *"deferred, non-functional in our build"* and verifies *"0 firebase/socket.io refs in the bundle."* For Plus (`93c2969b`): *"so users never see a service we don't run."*
+**Why:** attack-surface + bundle reduction. `1f9d9e45` records collab/backend were _"deferred, non-functional in our build"_ and verifies _"0 firebase/socket.io refs in the bundle."_ For Plus (`93c2969b`): _"so users never see a service we don't run."_
 
 ### 3.2 The local-first `App.tsx` rewrite
 
 `excalidraw-app/App.tsx` — net effect of `1f9d9e45` was ~486 changed lines (~50 added vs ~436 removed). Current file is **708 lines** (verified).
 
 #### `initializeScene` — `App.tsx:159–212`
+
 Rewritten signature: drops the `collabAPI` param and the discriminated `{isExternalScene, id, key}` union; now returns just `{ scene, isExternalScene: boolean }`.
+
 - **Removed**: `?id=` query handling, the `#json=<id>,<key>` backend-import branch (`importFromBackend` + `bumpElementVersions`), and the entire `roomLinkData`/`startCollaboration` path (including the `document.hidden` → focus-retry dance for collab links).
 - **Kept**: load from `localStorage` via `importFromLocalStorage()`, and the `#url=<href>` external-scene import which `fetch`es a remote `.excalidraw` blob, prompts via `openConfirmModal(shareableLinkConfirmDialog)` if the local scene is non-empty, and falls back to an `invalidSceneUrl` error. STRL marker at `App.tsx:159–160`.
 
 #### `loadImages` — collapsed to local-only
+
 Removed the `collabAPI.fetchImageFilesFromFirebase` branch and the `data.isExternalScene` → `loadFilesFromFirebase` branch (which used `FIREBASE_STORAGE_PREFIXES.shareLinkFiles`). Now: on `isInitialLoad`, collect `fileId`s from initialized image elements, fetch blobs from `LocalData.fileStorage.getFiles()` (IndexedDB), `addFiles`, and `clearObsoleteFiles`. STRL marker comment present (the only remaining `firebase` string in app **source** is this explanatory comment — all other matches live in the built bundle).
 
 #### The `#6` hashchange image fix — `App.tsx:333` (`c91641bc`)
-In the `onHashChange` handler, the call was changed from `loadImages(data)` to `loadImages(data, /* isInitialLoad */ true)` (verified at `App.tsx:319` and `App.tsx:333`). Because `loadImages` only loads referenced local images on the `isInitialLoad` path, navigating to a *new* `#url=` scene previously showed broken-image placeholders; passing `true` restores the images.
+
+In the `onHashChange` handler, the call was changed from `loadImages(data)` to `loadImages(data, /* isInitialLoad */ true)` (verified at `App.tsx:319` and `App.tsx:333`). Because `loadImages` only loads referenced local images on the `isInitialLoad` path, navigating to a _new_ `#url=` scene previously showed broken-image placeholders; passing `true` restores the images.
 
 #### Removed collab state / effects / handlers
+
 - State/atoms deleted: `collabAPI`, `isCollaborating`, `shareDialogState`, `collabError`, `isOffline`, `editorInterface`, `latestShareableLink`, `isCollabDisabled` (`isRunningInIframe`).
 - Handlers deleted: `onExportToBackend` (~45 lines), `onCollabDialogOpen`, and the `collabAPI.syncElements(elements)` call inside `onChange` (now `onChange` only does `LocalData.save`).
 - The main init `useEffect` guard simplified from `if (!excalidrawAPI || (!isCollabDisabled && !collabAPI))` to `if (!excalidrawAPI)`; `initializeScene({ excalidrawAPI })` no longer threads `collabAPI`. The `syncData` cross-tab handler dropped `importUsernameFromLocalStorage` and `collabAPI?.setUsername`.
 
 #### Removed render
+
 - Container `<div>` lost the `clsx("excalidraw-app", { "is-collaborating": isCollaborating })` (and the `clsx` import) → now plain `className="excalidraw-app"`.
 - `<Excalidraw>` lost `isCollaborating` and `onPointerUpdate` props.
 - `renderTopRightUI` (`App.tsx:614–624`) stripped of `CollabError` + `LiveCollaborationTrigger`; now renders only `<StrlExportButton>` (`App.tsx:621`).
@@ -228,12 +243,14 @@ In the `onHashChange` handler, the call was changed from `loadImages(data)` to `
 - `UIOptions.canvasActions.export` reduced to `{ saveFileToDisk: true }` (`App.tsx:604`).
 
 #### `AppMainMenu` / `AppWelcomeScreen`
+
 - `AppMainMenu.tsx` lost its `onCollabDialogOpen`/`isCollaborating`/`isCollabEnabled` props (and the live-collab menu entry); now also gated for desktop and with `Socials` removed.
 - `AppWelcomeScreen.tsx` lost its `onCollabDialogOpen`/`isCollabEnabled` props and the live-collaboration center menu item (and, in `93c2969b`, the Plus heading variant + Sign-up item).
 
 ### 3.3 Sentry removal (`60c961ca`)
 
 `excalidraw-app/components/TopErrorBoundary.tsx` — the error boundary is **kept**, but:
+
 - `import * as Sentry from "@sentry/browser"` removed; `sentryEventId` dropped from state.
 - `componentDidCatch` now `console.error(error, errorInfo)` locally instead of `Sentry.captureException` (STRL comment present).
 - Bug-report link retargeted from `github.com/excalidraw/excalidraw/issues/new` → `github.com/vader-syntheros-0x127/excalidraw/issues/new`.
@@ -252,14 +269,14 @@ In the `onHashChange` handler, the call was changed from `loadImages(data)` to `
 - **Re-adding collaboration means rebuilding from scratch.** `collab/`, `share/`, `data/firebase.ts`, and `data/index.ts` are fully deleted (not stubbed), and the `App.tsx` plumbing (`collabAPI` atom, `isCollaborating`, pointer-update, reconciliation, sync) is gone. The `firebase`/`socket.io-client`/`random-username` deps are uninstalled. An upstream merge that touches `App.tsx`'s collab paths **will conflict heavily**.
 - **`#url=` is the only remaining external-import path.** `#json=` (backend) and room/collab links no longer resolve.
 - **Dead-but-harmless leftovers in `app_constants.ts`:** top-level `FIREBASE_STORAGE_PREFIXES` (`app_constants.ts:32`) and `ROOM_ID_BYTES` (`:37`) are now orphaned (nothing imports them; verified) and were not cleaned up — a future tidy-up candidate. By contrast `STORAGE_KEYS.LOCAL_STORAGE_COLLAB` (`:42`) is **still live** — `data/localStorage.ts` reads it for storage-size accounting and the legacy username key, so do **not** delete it.
-- **`examples/` is untracked cruft in the working tree.** It is *not* tracked at HEAD (deleted in `60c961ca`, removed from workspaces in both `package.json` and `pnpm-workspace.yaml`), but stray `examples/with-nextjs` / `examples/with-script-in-browser` directories may re-materialize. They are outside the pnpm workspace so they don't build; `rm -rf examples/` to clean.
+- **`examples/` is untracked cruft in the working tree.** It is _not_ tracked at HEAD (deleted in `60c961ca`, removed from workspaces in both `package.json` and `pnpm-workspace.yaml`), but stray `examples/with-nextjs` / `examples/with-script-in-browser` directories may re-materialize. They are outside the pnpm workspace so they don't build; `rm -rf examples/` to clean.
 - `pnpm-workspace.yaml` workspaces are now `excalidraw-app`, `desktop`, `packages/*` (no `examples/*`).
 
 ---
 
 ## 4. Branding, theming & UI
 
-This area covers everything a user *sees* that diverges from upstream: the **STRL-Ideate** name rebrand (HTML head, PWA manifest), the generated visual identity (sparkle logo + favicons + OG image + desktop icon), **dark mode as default** plus a one-time migration for existing visitors, and the **removal of all upstream social/community links**.
+This area covers everything a user _sees_ that diverges from upstream: the **STRL-Ideate** name rebrand (HTML head, PWA manifest), the generated visual identity (sparkle logo + favicons + OG image + desktop icon), **dark mode as default** plus a one-time migration for existing visitors, and the **removal of all upstream social/community links**.
 
 > **Merge-risk note.** The text/SEO/theme edits live in low-risk app files (`excalidraw-app/*`). The logo, the `en.json` strings, and the HelpDialog edit touch the **library** (`packages/excalidraw/*`) and are higher risk — upstream rewrites these files frequently.
 
@@ -268,12 +285,14 @@ This area covers everything a user *sees* that diverges from upstream: the **STR
 Renames every user-visible "Excalidraw" string in the app shell.
 
 **`excalidraw-app/index.html`** (`STRL: branding` marker, line 5):
+
 - `<title>` → `STRL-Ideate` (`index.html:6`)
 - `<meta name="title">` → "Free, local whiteboard • Hand-drawn look & feel | STRL-Ideate" (`index.html:20–23`)
 - `<meta name="description">` and the `og:*` / `twitter:*` `site_name` / `title` / `description` / `image:alt` (`index.html:31–51`)
 - Screen-reader `<h1 class="visually-hidden">` → `STRL-Ideate` (`index.html:204`)
 
 **`excalidraw-app/vite.config.mts`** — PWA manifest (`STRL: branding` marker, line 229):
+
 - `short_name`, `name` → `STRL-Ideate`; `description` rewritten (`vite.config.mts:230–233`)
 
 **Deliberately left as upstream** (functional, not user-visible) so future merges are easier: `excalidraw-theme` localStorage key (`app_constants.ts:43`), `window.name = "_excalidraw"` (`index.html:153`), asset/font paths, the manifest `id: "excalidraw"` (`vite.config.mts:257`), and build tokens.
@@ -288,15 +307,17 @@ Renames every user-visible "Excalidraw" string in the app shell.
 
 The brand mark is a **"spark of an idea" sparkle**: a large 8-point white star + a small secondary sparkle, on an **indigo `#4f46e5`** rounded tile. Produced **programmatically (ImageMagick) — no external/licensed art.**
 
-> **Important for maintainers:** the ImageMagick *commands* were **not committed** — only described in the `bcf9539b` message. What *is* version-controlled is the **vector source of truth: `public/favicon.svg`** (the full mark). All raster assets are rasterizations of that SVG.
+> **Important for maintainers:** the ImageMagick _commands_ were **not committed** — only described in the `bcf9539b` message. What _is_ version-controlled is the **vector source of truth: `public/favicon.svg`** (the full mark). All raster assets are rasterizations of that SVG.
 
 **The wordmark/welcome logo — `packages/excalidraw/components/ExcalidrawLogo.tsx`** (LIBRARY file):
+
 - Rewritten from the upstream multi-hundred-char Excalidraw glyph path to two simple paths: the sparkle (`fill="currentColor"`, `viewBox="0 0 40 40"`) + a small secondary sparkle at 0.9 opacity (`ExcalidrawLogo.tsx:7–20`).
 - `LogoText` renders the literal text "STRL-Ideate" as an SVG `<text>` element in `Assistant, system-ui...` 46 px/700 (`ExcalidrawLogo.tsx:22–39`).
 - **Monochrome via `currentColor`** so it adapts to light/dark exactly like upstream. It **keeps the `.ExcalidrawLogo-icon` / `.ExcalidrawLogo-text` class names** so `ExcalidrawLogo.scss` sizing (the `is-xs`/`is-small`/`is-normal`/`is-large` variants) is unchanged — `.scss` was NOT edited. Rendered only by the welcome screen.
 - A snapshot was refreshed: `packages/excalidraw/components/__snapshots__/MobileMenu.test.tsx.snap`.
 
 **Favicons / PWA icons (repo-root `public/`)** — all regenerated as the STRL mark:
+
 - `favicon.svg` — canonical vector source (256×256, `rx=56` tile, `#4f46e5` fill, two white sparkle paths)
 - `favicon.ico` — multi-resolution **16/32/48/64** (verified via `identify`), sRGB
 - `favicon-16x16.png`, `favicon-32x32.png`
@@ -364,6 +385,7 @@ if (!window.localStorage.getItem(STRL_THEME_MIGRATION_KEY)) {
 ### 4.6 i18n visible-string rebrand (`90dc3980`, LIBRARY file)
 
 `packages/excalidraw/locales/en.json` — only **visible** strings, leaving JSON keys (and call sites) untouched:
+
 - `labels.addWatermark` → `Add "Made with STRL-Ideate"` (`en.json:70`)
 - `labels.madeWithExcalidraw` → `Made with STRL-Ideate` (`en.json:105`)
 - `labels.excalidrawLib` → `STRL-Ideate Library` (`en.json:135`)
@@ -401,10 +423,11 @@ The export logic was deliberately extracted into a standalone module (`excalidra
 3. The library's own image-export dialog still handles `.png`/`.svg`/`.excalidraw` save-to-disk for parity, but the STRL formats — notably **PDF** — only exist in the STRL pipeline.
 
 Two commits define this area:
+
 - **`d8d84c9c`** — introduced the button, the SCSS, the `strlExport.ts` helpers, the `renderTopRightUI` rewiring, the image-export dialog trimming, and the `jspdf` dependency.
 - **`76063b85`** — collapsed per-format `if (png) … else if (svg) … else (pdf)` branching that had been duplicated in **both** the web button and the desktop hook into a single dispatcher, `sceneToExportBytes(scene, format)`.
 
-> Note: `d8d84c9c`'s diff to `App.tsx` shows the export button living *alongside* gated collab UI inside `renderTopRightUI`. That collab scaffolding was **later removed** by the collab-strip `1f9d9e45`; the current `App.tsx:614–624` `renderTopRightUI` renders **only** `<StrlExportButton>` (`:621`).
+> Note: `d8d84c9c`'s diff to `App.tsx` shows the export button living _alongside_ gated collab UI inside `renderTopRightUI`. That collab scaffolding was **later removed** by the collab-strip `1f9d9e45`; the current `App.tsx:614–624` `renderTopRightUI` renders **only** `<StrlExportButton>` (`:621`).
 
 ### 5.1 The shared pipeline — `excalidraw-app/components/strlExport.ts`
 
@@ -422,6 +445,7 @@ Pure, UI-agnostic, the single source of truth for "scene → bytes":
 ### 5.2 Web surface — `StrlExportButton.tsx` + `.scss`
 
 `excalidraw-app/components/StrlExportButton.tsx` (added `d8d84c9c`, simplified `76063b85`) is a self-contained dropdown:
+
 - Local `open`/`busy`/`containerRef` state; an outside-`mousedown` listener closes the menu (`:25–39`).
 - `exportAs(format)` (`:41–68`) guards re-entrancy with `busy`, calls `resolveScene`, then the one-liner `const { data, extension, mimeType } = await sceneToExportBytes(scene, format); triggerDownload(data, ${scene.name}.${extension}, mimeType)`. Failures surface as a 3 s `setToast` plus a `console.error`. Before `76063b85` this body held the triplicated per-format branches.
 - Trigger label toggles `"Export ▾"` / `"Exporting…"`; menu offers **PNG image / SVG vector / PDF document** (`:82–94`).
@@ -429,6 +453,7 @@ Pure, UI-agnostic, the single source of truth for "scene → bytes":
 `StrlExportButton.scss` styles it entirely off **Excalidraw theme CSS variables** (`--island-bg-color`, `--text-primary-color`, `--default-border-color`, `--button-hover-bg`, `--shadow-island`, with hard-coded fallbacks) so it adapts to light/dark with no extra logic.
 
 ### 5.3 Wiring in `App.tsx`
+
 - Import at `App.tsx:70`: `import { StrlExportButton } from "./components/StrlExportButton";`.
 - `renderTopRightUI` (`App.tsx:614–624`) returns `null` on mobile or before the API is ready, else renders just `<StrlExportButton excalidrawAPI={excalidrawAPI} />` inside `.excalidraw-ui-top-right`.
 - **Image-export dialog trimming** (`App.tsx:598–607`) — `UIOptions.canvasActions.export` reduced to `{ saveFileToDisk: true }` (`:604`). `d8d84c9c` removed the `onExportToBackend` handler and the `renderCustomUI` that mounted `<ExportToExcalidrawPlus>`; the whole upsell/cloud stack was later removed by `93c2969b`.
@@ -441,12 +466,14 @@ Pure, UI-agnostic, the single source of truth for "scene → bytes":
 - Bridge types: `StrlMenuAction` and the `saveFile` signature in **`excalidraw-app/strl-desktop.d.ts:3–9,20–30`**, mirrored in **`desktop/src/preload.ts:10–12,32,75`**.
 
 ### 5.5 The jsPDF dependency
+
 - Declared as an **exact pin** in `excalidraw-app/package.json:32` — `"jspdf": "4.2.1"` (verified, no caret).
 - Lockfile entry in `pnpm-lock.yaml` (`sha512-YyAXyvnmjTbR…`).
 - **Supply-chain posture:** `d8d84c9c`'s message records jspdf was installed `--ignore-scripts` and vetted by Aikido Safe Chain. Under pnpm this stays enforced: `package.json`'s `pnpm.onlyBuiltDependencies` lists **only** `esbuild` and `electron`, so **jspdf's lifecycle/install scripts are not allowed to run**.
 
 ### 5.6 Maintenance / merge-risk notes
-- All export code lives in the **low-merge-risk** `excalidraw-app/` and `desktop/` workspaces — **no `packages/*` edits**. The pipeline only *calls* library exports (`exportToBlob`/`exportToSvg`/`exportToCanvas`/`serializeAsJSON`), tracking the public API.
+
+- All export code lives in the **low-merge-risk** `excalidraw-app/` and `desktop/` workspaces — **no `packages/*` edits**. The pipeline only _calls_ library exports (`exportToBlob`/`exportToSvg`/`exportToCanvas`/`serializeAsJSON`), tracking the public API.
 - The single conflict-prone touch point on merges is **`App.tsx`**: both `renderTopRightUI` and `UIOptions.canvasActions.export` are upstream-owned blocks STRL rewrote.
 - **To add a new export format:** extend `StrlExportFormat` + the `sceneToExportBytes` switch in `strlExport.ts`, then add the menu/button entries. Both sinks pick it up automatically.
 
@@ -459,6 +486,7 @@ The biggest net-new STRL subsystem: an additive `desktop/` pnpm workspace that w
 The whole subsystem is gated so the **web build is unaffected**: renderer code is guarded on `window.strlDesktop` (injected only by the Electron preload), and the build-time forks are gated on `VITE_APP_DESKTOP` / `--mode desktop`.
 
 **Where it lives / merge-risk:**
+
 - `desktop/` — **NEW** workspace, 100 % STRL, near-zero merge risk. Added to `pnpm-workspace.yaml` (`- "desktop"`).
 - `excalidraw-app/useDesktopIntegration.ts`, `strl-desktop.d.ts`, `components/strlExport.ts` — **NEW** STRL files in the app workspace.
 - `excalidraw-app/App.tsx`, `components/AppMainMenu.tsx`, `components/AppWelcomeScreen.tsx`, `index.html`, `vite.config.mts`, `package.json` — small **guarded STRL edits** to existing app files (low risk).
@@ -468,19 +496,29 @@ Commit lineage: `8cb6b0d9` (Phases 0–2: shell + native integration), `a3cabc8c
 
 ### 6.1 The `app://` custom protocol
 
-`desktop/src/main.ts:112–122` registers `app` as a **privileged scheme** *before* `app.whenReady()` (Electron requirement):
+`desktop/src/main.ts:112–122` registers `app` as a **privileged scheme** _before_ `app.whenReady()` (Electron requirement):
 
 ```js
-protocol.registerSchemesAsPrivileged([{ scheme: "app",
-  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "app",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+    },
+  },
+]);
 ```
 
 `standard`+`secure` give https-like origin semantics (the SPA keeps absolute `/` asset paths and a real `window.origin`); `supportFetchAPI`/`stream` enable fetch + streaming.
 
 The handler (`registerAppProtocol`, `main.ts:132–180`) is registered at `app.whenReady()` (`main.ts:770`). The window loads `app://-/index.html` (`main.ts:215`; `-` is a throwaway host). Behavior:
+
 - **Path decode + traversal guard** (`main.ts:134–152`): `decodeURIComponent(pathname)`, resolve inside `BUILD_DIR`, reject via `path.relative(BUILD_DIR, resolved)` — anything escaping yields `..`, a `..${sep}` prefix, or an absolute path → `403 Forbidden`. This **replaced** an earlier unsafe `resolved.startsWith(BUILD_DIR)` prefix check (which matched sibling dirs like `<BUILD_DIR>-evil` and was separator/case-fragile on Windows) in `f31357f4`. Verified to block `../etc/passwd`, `../../etc/passwd`, `../renderer-evil`.
 - **SPA fallback** (`main.ts:154–159`): if the resolved path isn't a real file and is extension-less, serve `index.html`; else serve the requested (likely 404) path. Makes client-side routing / deep links work.
-- **Streaming via `net.fetch`** (`main.ts:163`): `net.fetch(pathToFileURL(target))` — **asar-aware** (serves from `app.asar` when packaged, off disk in dev), streams the body, sets `content-type` automatically. History: `8cb6b0d9` used net.fetch → `03ff90be` switched to `fs.readFileSync` + explicit MIME map when re-enabling asar (wrongly believing net.fetch wasn't asar-aware) → `14187b79` reverted to net.fetch after confirming it *is* asar-aware (the readFileSync version was copying the ~1.9 MB main bundle synchronously per request despite `stream:true`).
+- **Streaming via `net.fetch`** (`main.ts:163`): `net.fetch(pathToFileURL(target))` — **asar-aware** (serves from `app.asar` when packaged, off disk in dev), streams the body, sets `content-type` automatically. History: `8cb6b0d9` used net.fetch → `03ff90be` switched to `fs.readFileSync` + explicit MIME map when re-enabling asar (wrongly believing net.fetch wasn't asar-aware) → `14187b79` reverted to net.fetch after confirming it _is_ asar-aware (the readFileSync version was copying the ~1.9 MB main bundle synchronously per request despite `stream:true`).
 - **CSP on the document only** (`main.ts:167–178`): sub-resources pass straight through; **only `index.html`** gets the `Content-Security-Policy` header injected (clone headers, `set("Content-Security-Policy", …)`, reuse the streamed body — never re-buffered). Sub-resources inherit the policy from the document.
 - `BUILD_DIR` (`main.ts:55–57`) is `__dirname/../renderer` when packaged, else `excalidraw-app/build` in dev.
 
@@ -511,9 +549,10 @@ connect-src 'self' data: blob:; worker-src 'self' blob:; media-src 'self' blob:;
 ### 6.4 The document model
 
 Main (`main.ts`) owns the document; the renderer holds the authoritative dirty bit.
+
 - **`activeFilePath`** (`main.ts:409`) — the open scene file (null = fresh/Untitled). Set via `setActiveFile` (`main.ts:490–497`) only after a confirmed open or a successful save — never speculatively, so a failed open can't make the next Save clobber a good file.
 - **Window title** (`updateTitle`, `main.ts:468–476`): `${isDirty ? "● " : ""}${name} — STRL-Ideate`, where `name` = basename without `.excalidraw`, or `Untitled`. Main owns the title and blocks the page from overriding it via `page-title-updated` → `event.preventDefault()` (`main.ts:220–222`).
-- **True Save vs Save-As** (`strl:save-file` handler, `main.ts:636–696`): a scene `Save` writes **in place with no dialog** *only* when it's a scene, `!saveAs`, there's an `activeFilePath`, **and that file still exists on disk** (`fs.existsSync`); otherwise it falls through to the native Save dialog. Save-As / first-save / any export always prompt. Only scene saves call `setActiveFile`.
+- **True Save vs Save-As** (`strl:save-file` handler, `main.ts:636–696`): a scene `Save` writes **in place with no dialog** _only_ when it's a scene, `!saveAs`, there's an `activeFilePath`, **and that file still exists on disk** (`fs.existsSync`); otherwise it falls through to the native Save dialog. Save-As / first-save / any export always prompt. Only scene saves call `setActiveFile`.
 - **Recents** (`main.ts:436–520`): persisted to `userData/recent-files.json`, max 10, newest-first, dedup by resolved path. Drives the native "Open Recent" submenu and is broadcast to the renderer (`strl:recent-files`) to populate the welcome-screen quick-open list (`AppWelcomeScreen.tsx:58–67`, top 5). `strl:open-recent` only honors paths already in main's recents list (`main.ts:718–725`).
 - **Unsaved-changes prompt** (`promptSaveBeforeClose`, `main.ts:522–538`): native Save / Don't Save / Cancel dialog, fired on window close and on New.
 - **20 s autosave** (`main.ts:779–790`): every 20 s, if `rendererReady && isDirty && activeFilePath && fs.existsSync(activeFilePath)`, silently `sendMenu("save")`. Untitled scenes are skipped (no path → dialog), and a vanished active file is skipped (don't resurrect a deleted file from a background timer).
@@ -522,6 +561,7 @@ Main (`main.ts`) owns the document; the renderer holds the authoritative dirty b
 ### 6.5 Renderer-ready + confirmOpened handshake (launch-open race fix)
 
 The original bug (`08d5c3d0`): the launch / file-association open was sent at `did-finish-load`, **before** the renderer registered its open handler, so the scene loaded empty — and an in-place Save would then overwrite the file with nothing. Fix:
+
 - The renderer registers its IPC handlers in `useDesktopIntegration`, **then** calls `desktop.ready()` → `strl:renderer-ready` (`useDesktopIntegration.ts:157–159`).
 - Main buffers any pre-ready open in `pendingOpenPath` (`openFilePath`, `main.ts:592–599`) and flushes it on `strl:renderer-ready` (`flushPendingOpen`, `main.ts:625–631`, `706–710`). `did-finish-load` deliberately does **not** flush (`main.ts:270–275`).
 - After loading, the renderer calls `desktop.confirmOpened(file.path)` → `strl:opened`, and **only then** does main adopt it as the active document (`main.ts:729–733`). The confirm fires right after `updateScene` (the commit point), **before** `addFiles`/`markSaved` (`useDesktopIntegration.ts:130–138`), so a later failure can't leave main pointing at the previous file (finding #2, `c91641bc`).
@@ -534,13 +574,14 @@ A `close` handler can't `await` before deciding, so the close flow (`main.ts:234
 
 ### 6.7 Dirty tracking (`useDesktopIntegration.ts:24–60`)
 
-Subscribes to `excalidrawAPI.onIncrement` and acts **only on `type === "durable"`** increments (real edits), ignoring ephemeral ones (pointer/selection/scroll) — so it doesn't recompute the scene version on every mouse move (findings #4/#8, `c91641bc`). The baseline is computed over `getSceneElementsIncludingDeleted()` — the *same* element set an increment reflects — so a scene that merely *contains* a deleted element isn't perpetually dirty. The first durable increment seeds `lastSavedVersion` (autoload) rather than marking dirty.
+Subscribes to `excalidrawAPI.onIncrement` and acts **only on `type === "durable"`** increments (real edits), ignoring ephemeral ones (pointer/selection/scroll) — so it doesn't recompute the scene version on every mouse move (findings #4/#8, `c91641bc`). The baseline is computed over `getSceneElementsIncludingDeleted()` — the _same_ element set an increment reflects — so a scene that merely _contains_ a deleted element isn't perpetually dirty. The first durable increment seeds `lastSavedVersion` (autoload) rather than marking dirty.
 
-`reportDirty` writes `window.__strlIsDirty` **synchronously** (the authoritative flag main's close guard reads via `executeJavaScript`, `main.ts:543–550`) and only sends `strl:set-dirty` on a *change* (debounce). `main`'s own `isDirty` is a fallback mirror used only if the renderer is unreachable mid-teardown. `markSaved` re-baselines on New / open / successful save; `saveScene` snapshots the baseline **before** the async save dialog so edits during the dialog aren't counted as saved.
+`reportDirty` writes `window.__strlIsDirty` **synchronously** (the authoritative flag main's close guard reads via `executeJavaScript`, `main.ts:543–550`) and only sends `strl:set-dirty` on a _change_ (debounce). `main`'s own `isDirty` is a fallback mirror used only if the renderer is unreachable mid-teardown. `markSaved` re-baselines on New / open / successful save; `saveScene` snapshots the baseline **before** the async save dialog so edits during the dialog aren't counted as saved.
 
 ### 6.8 Fonts-local-for-desktop (no phone-home)
 
 Driven by `VITE_APP_DESKTOP=true` (`.env.desktop`) and `--mode desktop`. Three forks (all gated so the web path is unchanged):
+
 1. `scripts/woff2/woff2-vite-plugins.js` — for `isDesktop` (`mode==="desktop"`): rewrites `fonts.css` to a single local `@font-face` (`src: url(/Assistant-Regular.woff2); font-weight: 400 700` — only `Assistant-Regular` ships; the browser synthesizes 500/600/700); injects `window.EXCALIDRAW_ASSET_PATH = window.origin` into `index.html` (no CDN preloads). The web build keeps the DigitalOcean CDN `@font-face`s + esm.sh fallback + cross-origin preloads.
 2. `excalidraw-app/index.html:99–104` — the Google-fonts `preconnect`s are wrapped in an EJS `<% if VITE_APP_DESKTOP != 'true' %>`, so the desktop build emits no cross-origin preconnects.
 3. `packages/excalidraw/fonts/ExcalidrawFontFace.ts` (LIBRARY edit) — `ASSETS_FALLBACK_URL` (`:14–21`) folds to `""` when `import.meta.env.VITE_APP_DESKTOP === "true"`, so esbuild **drops the `https://esm.sh/...` string from the bundle entirely**; and `createUrls` (`:176–178`) never appends the remote esm.sh fallback URL on desktop. `packages/excalidraw/vite-env.d.ts` declares `VITE_APP_DESKTOP`.
@@ -552,6 +593,7 @@ Result (verified in `b3d91766`): the desktop bundle has zero external refs (esm.
 Targets (`electron-builder.yml`): **Linux** AppImage + deb (`linux:` block); **Windows** nsis installer + portable .exe (`win:`); **macOS** dmg x64+arm64 (`mac:`). `appId: com.strl.ideate`, `productName: STRL-Ideate`. `.excalidraw` `fileAssociations` → Windows ProgID/extension via NSIS, macOS `CFBundleDocumentTypes`, Linux `.desktop` MimeType; OS then launches with the file path (argv on win/linux, `open-file` event on mac), handled in main.ts (`takeFileFromArgv` + `app.on("open-file")` + single-instance).
 
 Build commands (`desktop/package.json`, run from `desktop/`):
+
 - `pnpm dist:linux` / `dist:win` / `dist:mac` — each runs `prepackage` (`build:main` = `tsc`; `build:renderer` = `pnpm -C ../excalidraw-app build:desktop` then copies `excalidraw-app/build` → `desktop/renderer`) then `electron-builder --<os>`.
 - `build:desktop` (`excalidraw-app/package.json:42`) = `cross-env VITE_APP_DISABLE_PWA=true vite build --mode desktop`.
 - Dev: `pnpm start` (build main + `electron .`, loads packaged renderer over `app://`) or `pnpm start:dev` (sets `STRL_DESKTOP_DEV_URL=http://localhost:3000`, loads the live Vite dev server + opens DevTools).
@@ -562,10 +604,12 @@ Build commands (`desktop/package.json`, run from `desktop/`):
 macOS entitlements (`assets/entitlements.mac.plist`): minimal hardened-runtime set — `allow-jit`, `allow-unsigned-executable-memory`, `disable-library-validation` (for Electron/V8). **Deliberately NO `app-sandbox`** — sandboxing would break the native open/save dialogs for local `.excalidraw` files. Lives in `assets/` (buildResources) because the repo gitignores `build/`.
 
 ### 6.10 Path-traversal hardening (two layers)
+
 - The `app://` handler guard (§6.1, `f31357f4`).
 - The file-open guard (`ee0001cd`, `main.ts:601–609`): Snyk SAST flagged CWE-23 (OS/CLI path → `readFileSync`). `openFilePath` now requires a `.excalidraw` extension (lowercased), requires a regular file, and caps size at 50 MB (`MAX_SCENE_BYTES`) before reading.
 
 ### 6.11 Renderer integration points (web stays unaffected)
+
 - `App.tsx:222` — `useDesktopIntegration(excalidrawAPI)` (no-op on web; guarded on `window.strlDesktop`).
 - `AppMainMenu.tsx:21–25` — hides the library's browser-FS `LoadScene` / `SaveToActiveFile` menu items on desktop (native File menu owns Ctrl+O/Ctrl+S), guarded on `!isDesktop`; also dropped `<MainMenu.DefaultItems.Socials />` (`:32`).
 - `AppWelcomeScreen.tsx` — recent-files quick-open on the start screen.
@@ -590,7 +634,7 @@ The CSP (`desktop/src/main.ts:35–49`, full policy in §6.2) is injected **only
 The three hashes correspond to the three inline `<script>` blocks in the **built** (vite-transformed, minified) desktop renderer `index.html`, **NOT** the source `excalidraw-app/index.html`. Recomputing sha256(script body)→base64 against `desktop/renderer/index.html` matches all three exactly:
 
 | CSP slot | hash | inline script |
-|---|---|---|
+| --- | --- | --- |
 | 1 | `iPtxE0n242JUcLKPr7D09tSIF4FKNSy5jqkeySXxfDY=` | dark-mode early-paint (`try { setTheme(getTheme()) }`) — source `excalidraw-app/index.html:55–90` |
 | 2 | `mXvmZWZG6iAZBw0OliHQaJOSMPc9DbQZJaxywImBlQo=` | local asset-path (`window.EXCALIDRAW_ASSET_PATH = window.origin`) — **injected by the woff2 desktop branch**, `scripts/woff2/woff2-vite-plugins.js:67–74` |
 | 3 | `Kxm9zQ99NqYtDuNSdByEfyFAYVPAqWdmNFx5axumk1w=` | `window.name = "_excalidraw"` — source `excalidraw-app/index.html:151–154` |
@@ -598,6 +642,7 @@ The three hashes correspond to the three inline `<script>` blocks in the **built
 **MAINTENANCE GOTCHA (load-bearing):** these hashes are over the **post-build minified** bodies, so they will silently drift if anyone (a) edits those three inline scripts, (b) changes the woff2 desktop-font injection text, or (c) changes the minifier. The **source-file hashes do NOT match the CSP.** To recompute, build the desktop renderer and hash the inline `<script>` bodies of `desktop/renderer/index.html` (base64 of sha256). The `main.ts:34` comment points at this. The safety net is the `STRL_SMOKE=1` probe (§6.12), which asserts `dark:true`/`hasEditor:true`; a hash mismatch blocks the inline scripts and fails the editor mount.
 
 ### 7.2 Renderer / app:// hardening (defense in depth around the CSP)
+
 - `BrowserWindow` webPreferences (`main.ts:198–204`): `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, `spellcheck: false`, dedicated `preload.js`.
 - `app://` scheme registered as `standard` + `secure` (`main.ts:112–122`).
 - Navigation lock-down (`main.ts:806–822`): `setWindowOpenHandler` denies all in-app window opens and shunts `http(s)` to the OS browser; `will-navigate` blocked unless target is `app://` (or the dev URL in dev).
@@ -614,7 +659,7 @@ The ship-clean env (`a3cabc8c`, `e993f64d`): `.env.desktop` (**at repo root**) s
 Env files live at **repo root** (Vite `envDir: "../"` in `vite.config.mts:24`, `loadEnv(mode, "../")` at `:14`). There are **three**:
 
 | File | `mode` | Distinguishing settings |
-|---|---|---|
+| --- | --- | --- |
 | `.env.production` | `production` | PWA stays ON; `VITE_APP_ENABLE_TRACKING=false` |
 | `.env.development` | `development` | `VITE_APP_PORT=3001`, `FAST_REFRESH=false`, eslint ON, PWA off |
 | `.env.desktop` | `production` (`MODE=production`) | `VITE_APP_DISABLE_PWA=true`, **`VITE_APP_DESKTOP=true`** |
@@ -622,6 +667,7 @@ Env files live at **repo root** (Vite `envDir: "../"` in `vite.config.mts:24`, `
 **What every variant deliberately empties** (so no excalidraw.com backend identifier is baked into any build): `VITE_APP_BACKEND_V2_GET_URL`, `VITE_APP_BACKEND_V2_POST_URL`, `VITE_APP_WS_SERVER_URL`, `VITE_APP_FIREBASE_CONFIG`, `VITE_APP_AI_BACKEND`, `VITE_APP_LIBRARY_URL`, `VITE_APP_LIBRARY_BACKEND`, `VITE_APP_PLUS_LP`, `VITE_APP_PLUS_APP`, `VITE_APP_PLUS_EXPORT_PUBLIC_KEY`. All empty; `VITE_APP_ENABLE_TRACKING=false` everywhere.
 
 #### Neutralized web SEO / external surface (`90dc3980`, `504f36e5`)
+
 - `vercel.json`: removed `Access-Control-Allow-Origin: https://excalidraw.com` (two occurrences), the `/webex/*` and `vscode.excalidraw.com` redirects, and `installCommand` yarn → `pnpm install --frozen-lockfile`.
 - `excalidraw-app/vite.config.mts`: removed the **Sitemap** plugin (`:137`) and the PWA **screenshots[]** (`:286–287`); SW disabled for desktop via `VITE_APP_DISABLE_PWA` (`:153–157`); sourcemaps off (`:131–132`).
 - `excalidraw-app/index.html`: dropped "collaborative" wording; removed `og:url`/`twitter:url`/canonical/`twitter:site`; repointed og/twitter image to local `/og-image.png`; the SimpleAnalytics loader (`:208–246`) is EJS-gated on `VITE_APP_ENABLE_TRACKING == 'true'`, so desktop omits it entirely; removed the Excalidraw+ auto-redirect.
@@ -641,11 +687,13 @@ Two enforcement points in `desktop/src/main.ts`:
 Two-layer model (from the standing STRL policy; both layers required):
 
 **Layer 1 — PRE-INSTALL (block malware before lifecycle scripts run), enforced locally:**
+
 - **Aikido Safe Chain** (v1.5.2, global, active) wraps npm/yarn/pnpm/npx as shell functions, checking each package against Aikido Intel in real time (blocks known-malicious / typosquat / too-new). Verified blocking live.
 - Never a bare install; hardened form `pnpm install --frozen-lockfile --ignore-scripts`. pnpm blocks build scripts by default unless allowlisted in `package.json` → `pnpm.onlyBuiltDependencies`, kept minimal: **`esbuild` and `electron` only** (`package.json:91–94`). Every other package (e.g. `jspdf`) installs script-free.
 - **`.npmrc` cooldown:** `minimum-release-age=1440` (24 h). Also `save-exact=true`, `node-linker=hoisted` (Electron/electron-builder need a flat tree; excalidraw-app uses `vite` as a phantom dep), no custom/unknown registries.
 
 **Layer 2 — POST-INSTALL (catch known vulns + code issues):**
+
 - SCA: `pnpm audit` + Snyk SCA. SAST: Snyk Code. Snyk **org = `syntheros`** (org id `95a58957-6a13-44d0-87da-a32a62e002cd`) — the only org with the Snyk Code (SAST) add-on; the personal org silently skips SAST.
 - **Monorepo gotcha:** `snyk test` on the full hoisted root 400s ("request too large"); scan **per-workspace** (`--file=excalidraw-app/package.json` / `desktop/package.json`). Build artifacts (`build/`, `dist/`, `dist-installers/`, `renderer/`) excluded from SAST to avoid duplicate findings.
 - Known residual `pnpm audit` highs are accepted as build-tooling only (vite-plugin-html, sass) + `lodash-es` via mermaid — cleared on upstream sync.
@@ -653,14 +701,16 @@ Two-layer model (from the standing STRL policy; both layers required):
 ### 7.6 CI workflows
 
 #### `.github/workflows/desktop-build.yml` — installer build matrix
+
 - Trigger: `workflow_dispatch` only (tag-push trigger present but commented). `permissions: contents: read`.
 - Matrix: ubuntu→`dist:linux` (AppImage+deb), windows→`dist:win` (NSIS+portable .exe), macos→`dist:mac` (dmg x64+arm64). `fail-fast: false`, 45-min timeout.
-- corepack pins **pnpm@10.34.1** *before* setup-node (so `cache: pnpm` resolves), **Node 22**. All third-party actions are **SHA-pinned** (checkout/setup-node/cache/upload-artifact pinned to full commit SHAs with `# v4` comments).
+- corepack pins **pnpm@10.34.1** _before_ setup-node (so `cache: pnpm` resolves), **Node 22**. All third-party actions are **SHA-pinned** (checkout/setup-node/cache/upload-artifact pinned to full commit SHAs with `# v4` comments).
 - Install is `pnpm install --frozen-lockfile`; `electron` postinstall runs here via the `onlyBuiltDependencies` allowlist (no rebuild step).
 - **SHA-256 sidecars** (`:107–114`): after each build, a cross-platform `node` one-liner emits a `<file>.sha256` next to every `.AppImage/.deb/.exe/.dmg`, uploaded with the installers (`:122–127`). `bash` shell unifies the loop across win/mac/linux (Git-Bash on Windows).
 - **NO publish, NO GitHub release, NO auto-update** — electron-updater is intentionally absent and a `publish:` block must not be added (header comment `:8–10`). Builds are **UNSIGNED**: `CSC_IDENTITY_AUTO_DISCOVERY: "false"` (`:46–47`) forces a clean unsigned build; signing/notarization are HELD with the exact secret names documented inline (`:96–99`).
 
 #### `.github/workflows/security-scan.yml` — post-install scanning in CI
+
 - Triggers: dispatch, push to `master`/`feat/desktop-app`, all PRs, and weekly cron `0 6 * * 1`. `permissions: contents: read`.
 - **`audit` job:** `pnpm audit --prod --audit-level=high` — always runs, **no secrets**, `continue-on-error: true` (informational).
 - **`snyk` job:** Snyk SCA (`snyk test --all-projects`), Snyk Code SAST (`snyk code test`), and `snyk monitor`, all `--org=syntheros --severity-threshold=high` + `continue-on-error`. **Gated on `SNYK_TOKEN`**: the secret is mapped into `env.SNYK_TOKEN` (`:54–56`) specifically so step-level `if: ${{ env.SNYK_TOKEN != '' }}` conditions can reference it (secrets can't be used directly in `if:`); when the token is absent every Snyk step is skipped and a "Notice (no token)" step prints how to enable it. Findings **report, do not gate**. A comment (`:90–92`) records the monorepo-root 400 workaround (scan per-workspace).
@@ -676,7 +726,7 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 ### Root config & tooling
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `.npmrc` | pnpm config: `node-linker=hoisted`, `link-workspace-packages=true`, `strict-peer-dependencies=false`, `minimum-release-age=1440`, `save-exact` | config-edit | Low |
 | `pnpm-workspace.yaml` | New workspace manifest: `excalidraw-app`, `desktop`, `packages/*` (replaces yarn workspaces; adds `desktop/`, drops `examples/*`) | added-strl | Low |
 | `package.json` | `packageManager pnpm@10.34.1`; scripts yarn→pnpm; `pnpm` block (`vite-plugin-html>vite` + `strip-ansi` overrides, `onlyBuiltDependencies: [esbuild, electron]`); removed `@types/socket.io-client` + `examples/*` workspaces; renamed `strl-ideate-monorepo` | config-edit | Medium |
@@ -690,7 +740,7 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 ### `excalidraw-app/` (the SPA)
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `excalidraw-app/App.tsx` | Local-first rewrite (`initializeScene` localStorage + `#url=` only; local-only `loadImages`; removed all collab state/effects/handlers/render + community command-palette items); `#6` hashchange image fix (`:333`); mounts `StrlExportButton` in `renderTopRightUI` (`:614–624`); trims `UIOptions.canvasActions.export` to `{saveFileToDisk:true}` (`:604`); calls `useDesktopIntegration` (`:222`) | app-edit | **High** |
 | `excalidraw-app/index.tsx` | Removed `import "../excalidraw-app/sentry"` side-effect import | app-edit | Low |
 | `excalidraw-app/index.html` | STRL-Ideate title/meta/og/twitter; dark-mode early-paint default + one-time `strl-theme-dark-default-v1` migration; SVG favicon link; removed canonical/og-url/collab wording; local `/og-image.png`; desktop-gated Google-fonts preconnects (`:99–104`); analytics loader EJS-gated (`:208–246`); removed Excalidraw+ auto-redirect (`:108`) | app-edit | Medium |
@@ -712,7 +762,7 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 ### `excalidraw-app/` deletions (gone at HEAD)
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `excalidraw-app/collab/Collab.tsx` · `Portal.tsx` · `CollabError.{tsx,scss}` | Deleted — entire real-time collab engine | app-edit | High (on collab upstream changes) |
 | `excalidraw-app/share/ShareDialog.{tsx,scss}` · `QRCode.tsx` · `qrcode.chunk.ts` | Deleted — shareable-link / room-invite UI | app-edit | Medium |
 | `excalidraw-app/data/firebase.ts` | Deleted — Firebase scene + image storage | app-edit | Medium |
@@ -729,7 +779,7 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 ### `packages/*` (the library — HIGHER merge risk)
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `packages/excalidraw/components/ExcalidrawLogo.tsx` | Replaced Excalidraw glyph with STRL sparkle mark + "STRL-Ideate" wordmark (monochrome `currentColor`); kept `.ExcalidrawLogo-icon/-text` classes | library-edit | **High** |
 | `packages/excalidraw/components/HelpDialog.tsx` | Deleted the external-links `Header` (Docs/Blog/GitHub/YouTube) + unused icon imports; dialog now only shows shortcuts (`:18`) | library-edit | **High** |
 | `packages/excalidraw/locales/en.json` | Rebranded 5 visible strings (watermark ×2, library, installPWA, invalidSceneUrl) | library-edit | **High** |
@@ -741,20 +791,20 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 ### `desktop/` (NEW Electron workspace — zero merge risk)
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `desktop/src/main.ts` | Electron main: `app://` privileged protocol (streaming `net.fetch`, `path.relative` traversal guard, SPA fallback, CSP-on-document), window/state, native menu, document model (activeFilePath/dirty/recents/title/autosave/Save-vs-Save-As), close/new save round-trip, full `strl:*` IPC, single-instance, navigation hardening, `.excalidraw`+regular-file+50 MB file-open guard | added-strl | Zero |
 | `desktop/src/preload.ts` | `contextBridge` typed `window.strlDesktop` API over every `strl:*` channel; `contextIsolation`+`sandbox` on; no Node internals leak | added-strl | Zero |
 | `desktop/electron-builder.yml` | Packaging: `appId com.strl.ideate`, `asar:true`, `fileAssociations(.excalidraw)`, linux AppImage+deb, win nsis+portable, mac dmg x64/arm64 hardenedRuntime; signing/notarize HELD | added-strl | Zero |
 | `desktop/assets/entitlements.mac.plist` | Minimal hardened-runtime entitlements (`allow-jit`/`unsigned-exec-mem`/`disable-library-validation`); NO `app-sandbox` so native file dialogs work | added-strl | Zero |
 | `desktop/assets/icon.png` | STRL mark (512×512); electron-builder derives `.ico`/`.icns`; byte-identical to `android-chrome-512x512.png` | added-strl | Zero |
-| `desktop/package.json` | Electron 42.3.0 + electron-builder 26.8.1; `build:main`/`build:renderer`/`prepackage`/`dist:linux|win|mac`/`start`/`start:dev`; name `strl-ideate-desktop`; de-leaked description | added-strl | Zero |
+| `desktop/package.json` | Electron 42.3.0 + electron-builder 26.8.1; `build:main`/`build:renderer`/`prepackage`/`dist:linux | win | mac`/`start`/`start:dev`; name `strl-ideate-desktop`; de-leaked description | added-strl | Zero |
 | `desktop/tsconfig.json` | Separate `tsc` config for main/preload (`module node16`, ES2022, strict, `types:[node]`, no DOM) — NOT covered by root typecheck | added-strl | Zero |
 | `desktop/renderer/index.html` | Built desktop renderer; its 3 minified inline scripts are the source of the verified CSP hashes (build artifact) | added-strl | Zero |
 
 ### Brand assets (repo-root `public/`)
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `public/favicon.svg` | Canonical STRL sparkle vector (256×256, `#4f46e5` tile, white sparkles) — **source of truth** for all raster brand assets | added-strl | Low |
 | `public/favicon.ico` | Regenerated STRL mark, multi-res 16/32/48/64 | added-strl | Low |
 | `public/favicon-16x16.png` · `favicon-32x32.png` | Regenerated STRL mark | added-strl | Low |
@@ -766,14 +816,14 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 ### CI workflows (NEW)
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `.github/workflows/desktop-build.yml` | Manual-dispatch matrix (ubuntu/windows/macos) → unsigned installer artifacts + SHA-256 sidecars; corepack pnpm 10.34.1 + Node 22; SHA-pinned actions; NO publish/release/auto-update | added-strl | Zero |
 | `.github/workflows/security-scan.yml` | `pnpm audit` (always, no secrets) + Snyk SCA/Code/monitor (org `syntheros`) gated on `SNYK_TOKEN` via env-mapping; report-not-gate | added-strl | Zero |
 
 ### Deleted directories
 
 | Path | What STRL changed | Type | Merge-risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `dev-docs/` | Deleted entire Docusaurus dev-docs site | config-edit | Low |
 | `firebase-project/` | Deleted Firebase project config | config-edit | Low |
 | `examples/` | Deleted from git (CVE/audit noise) + dropped from workspaces; stray untracked copies may remain in the working tree | config-edit | Low |
@@ -785,7 +835,7 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 Every `strl:*` channel. The preload (`desktop/src/preload.ts`) exposes all of these as the typed `window.strlDesktop` API via `contextBridge.exposeInMainWorld`; `contextIsolation`+`sandbox` stay on. Renderer-side types are duplicated in `excalidraw-app/strl-desktop.d.ts` (the `Window.strlDesktop?` global) since the app can't import from the desktop workspace.
 
 | Channel | Mechanism | Direction | Payload | Purpose |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `strl:menu` | `webContents.send` / `onMenu` | main → renderer | `MenuAction` (`new`/`save`/`save-as`/`export-png`/`export-svg`/`export-pdf`) | native File-menu action (also autosave → `"save"`) |
 | `strl:open-file` | send / `onOpenFile` | main → renderer | `{ name, contents, path }` | deliver a `.excalidraw` to load (CLI / file-assoc / Open…/recent) |
 | `strl:renderer-ready` | `ipcRenderer.send` | renderer → main | — | renderer mounted; flush buffered opens + seed recents |
@@ -807,7 +857,7 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 ### Web (root + `excalidraw-app/`)
 
 | Command (root) | Delegates to | Effect |
-|---|---|---|
+| --- | --- | --- |
 | `pnpm start` | `excalidraw-app` `start` → `vite` | dev server (port from `VITE_APP_PORT`; **defaults to :3001** via `.env.development`) |
 | `pnpm build` | `build:app` + `build:version` | production web build into `excalidraw-app/build` (PWA ON) |
 | `pnpm build:app` | `cross-env VITE_APP_GIT_SHA=… VITE_APP_ENABLE_TRACKING=true vite build` | standard web build |
@@ -822,7 +872,7 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 ### Desktop (`desktop/`) — run from `desktop/`
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `pnpm build:main` | `tsc -p tsconfig.json` — compiles `src/main.ts` + `src/preload.ts` to `dist/` (module `node16`, target ES2022) |
 | `pnpm build:renderer` | `pnpm -C ../excalidraw-app build:desktop`, then `rm -rf renderer` and copy `excalidraw-app/build` → `desktop/renderer` |
 | `pnpm prepackage` | `build:main` + `build:renderer` |
@@ -835,7 +885,7 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 ### Per-platform packaging constraints
 
 | Target | Runner | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Linux AppImage + deb | `ubuntu-latest` | native |
 | Windows NSIS + portable .exe | `windows-latest` | cross-build on Linux needs wine for rcedit |
 | macOS dmg (x64 + arm64) | `macos-latest` | only buildable on macOS (`hdiutil`/`dmgbuild`) |
@@ -854,7 +904,7 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 ## 11. Held / deferred items
 
 | Item | State | How to enable |
-|---|---|---|
+| --- | --- | --- |
 | **Code signing** | HELD — builds are valid **unsigned** installers/dmg; `CSC_IDENTITY_AUTO_DISCOVERY: "false"` in CI | provide `CSC_*` env (cert) — env-only, no YAML change |
 | **macOS notarization** | HELD — `notarize: false` (`electron-builder.yml`) | flip to `{ teamId: … }` + `APPLE_*` env |
 | **Auto-update** | Intentionally absent — `electron-updater` not installed; CI has **no** `publish:` block (do not add one) | out of scope for the local-first product |
@@ -914,132 +964,100 @@ The three `sha256-…` hashes in `desktop/src/main.ts:35–49` are over the **po
 
 ## 13. AI authoring — MCP server + in-app panel
 
-Lets AI tools and LLMs **draw diagrams, edit existing ones, and embed images** in
-STRL-Ideate, while keeping the fork local-first (no phone-home by default, strict
-desktop CSP). Three independent pieces, built in this order. Commits: `d0cba236`
-(engine + MCP), `a3864b5b` (live-reload), `a79a81a2` (in-app panel + CSP).
+Lets AI tools and LLMs **draw diagrams, edit existing ones, and embed images** in STRL-Ideate, while keeping the fork local-first (no phone-home by default, strict desktop CSP). Three independent pieces, built in this order. Commits: `d0cba236` (engine + MCP), `a3864b5b` (live-reload), `a79a81a2` (in-app panel + CSP).
 
 ### 13.1 The make-or-break insight (headless scene building)
 
-`convertToExcalidrawElements` / `restoreElements` are DOM-free **except** for text
-measurement, whose only DOM path is `CanvasTextMetricsProvider`
-(`packages/element/src/textMeasurements.ts:121`, `document.createElement("canvas")`),
-constructed lazily only when no provider is set. The library already exposes
-`setCustomTextMetricsProvider()` (`:113`, re-exported at `packages/excalidraw/index.tsx:412`).
-We register a pure-Node provider → the whole transform/restore path runs under bare
-`node`. Text **height** is exact (FONT_METADATA); **width** is approximate but
-deterministic and self-heals when the app re-measures on load.
+`convertToExcalidrawElements` / `restoreElements` are DOM-free **except** for text measurement, whose only DOM path is `CanvasTextMetricsProvider` (`packages/element/src/textMeasurements.ts:121`, `document.createElement("canvas")`), constructed lazily only when no provider is set. The library already exposes `setCustomTextMetricsProvider()` (`:113`, re-exported at `packages/excalidraw/index.tsx:412`). We register a pure-Node provider → the whole transform/restore path runs under bare `node`. Text **height** is exact (FONT_METADATA); **width** is approximate but deterministic and self-heals when the app re-measures on load.
 
 ### 13.2 `packages/strl-authoring` — the engine (`@strl/authoring`)
 
-DOM-free **and** node-free (so it typechecks under the root config like any internal
-package). New pnpm workspace package; **zero new external runtime deps**.
+DOM-free **and** node-free (so it typechecks under the root config like any internal package). New pnpm workspace package; **zero new external runtime deps**.
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `src/textMetrics.ts` | `registerNodeTextMetrics()` — the keystone; registers the pure-Node advance-width provider (idempotent). MUST run before any convert/restore. |
 | `src/scene.ts` | `createScene` / `addShapes` / `addImage` / `editElements` / `deleteElements` / `getSceneSummary`. Reuses `convertToExcalidrawElements`. |
 | `src/io.ts` | `serializeScene` (reproduces `serializeAsJSON(...,'local')` from light parts — importing `data/json.ts` would drag the browser render/export graph in) and `parseSceneFile` (`restoreElements`, NOT browser-only `loadFromBlob`). |
 | `src/files.ts` | `binaryFileFromDataURL` — pure data-URL → `BinaryFileData`. |
 
-Built by `build.mjs` (esbuild, `platform:node`) via the shared
-`scripts/strl-esbuild-node.mjs`, which: aliases `@excalidraw/*` and `@strl/authoring`
-to source; empty-loads font/css/image assets (the engine needs font *metadata*, not
-binaries); and banners a few module-eval browser-global stubs (`devicePixelRatio=1`,
-and `window` *declared* `undefined` so defensive `window?.x` guards don't
-ReferenceError while `typeof window === "undefined"` stays true → headless branch).
-Verify: `node smoke.mjs` (7 elements, stable round-trip, `domAbsent:true`).
+Built by `build.mjs` (esbuild, `platform:node`) via the shared `scripts/strl-esbuild-node.mjs`, which: aliases `@excalidraw/*` and `@strl/authoring` to source; empty-loads font/css/image assets (the engine needs font _metadata_, not binaries); and banners a few module-eval browser-global stubs (`devicePixelRatio=1`, and `window` _declared_ `undefined` so defensive `window?.x` guards don't ReferenceError while `typeof window === "undefined"` stays true → headless branch). Verify: `node smoke.mjs` (7 elements, stable round-trip, `domAbsent:true`).
 
 ### 13.3 `packages/strl-mcp-server` — the MCP server (`@strl/mcp-server`)
 
-Standalone stdio MCP server (low-level `@modelcontextprotocol/sdk@1.29.0`, JSON-Schema
-tools — no zod authoring). The **one** new external dep; installed
-`--ignore-scripts` under Aikido Safe Chain, Snyk-scanned (`--org=syntheros`).
+Standalone stdio MCP server (low-level `@modelcontextprotocol/sdk@1.29.0`, JSON-Schema tools — no zod authoring). The **one** new external dep; installed `--ignore-scripts` under Aikido Safe Chain, Snyk-scanned (`--org=syntheros`).
 
-- **Tools:** `create_scene`, `add_shapes`, `add_image`, `edit_elements`,
-  `delete_elements`, `get_scene`, and opt-in `generate_image`.
-- **Sandbox:** every target resolved under `STRL_MCP_WORKDIR` with a path-traversal
-  guard (`path.relative` → reject `..`/absolute) + `.excalidraw` ext + 50 MB cap.
-  Writes are **atomic** (temp + `fs.rename`) so a watcher only ever sees a whole file.
-- **Env:** `STRL_MCP_WORKDIR` (required sandbox root), `STRL_MCP_ACTIVE_FILE` (default
-  target), `STRL_MCP_IMAGE_ENDPOINT`/`_MODEL`/`_KEY`/`_SIZE` (opt-in image gen; absent
-  ⇒ `generate_image` returns disabled — **no default endpoint, no phone-home**).
-- **Run** (register in a client's `mcpServers`):
-  `{ "command": "node", "args": ["/abs/.../packages/strl-mcp-server/dist/bin.js"],
-     "env": { "STRL_MCP_WORKDIR": "/abs/sketches", "STRL_MCP_ACTIVE_FILE": "scene.excalidraw" } }`.
-- Verify: `node mcp-smoke.mjs` (drives the bin over real JSON-RPC stdio: 7 tools,
-  create/edit/add_image, path-traversal rejected, on-disk file valid).
+- **Tools:** `create_scene`, `add_shapes`, `add_image`, `edit_elements`, `delete_elements`, `get_scene`, and opt-in `generate_image`.
+- **Sandbox:** every target resolved under `STRL_MCP_WORKDIR` with a path-traversal guard (`path.relative` → reject `..`/absolute) + `.excalidraw` ext + 50 MB cap. Writes are **atomic** (temp + `fs.rename`) so a watcher only ever sees a whole file.
+- **Env:** `STRL_MCP_WORKDIR` (required sandbox root), `STRL_MCP_ACTIVE_FILE` (default target), `STRL_MCP_IMAGE_ENDPOINT`/`_MODEL`/`_KEY`/`_SIZE` (opt-in image gen; absent ⇒ `generate_image` returns disabled — **no default endpoint, no phone-home**).
+- **Run** (register in a client's `mcpServers`): `{ "command": "node", "args": ["/abs/.../packages/strl-mcp-server/dist/bin.js"], "env": { "STRL_MCP_WORKDIR": "/abs/sketches", "STRL_MCP_ACTIVE_FILE": "scene.excalidraw" } }`.
+- Verify: `node mcp-smoke.mjs` (drives the bin over real JSON-RPC stdio: 7 tools, create/edit/add_image, path-traversal rejected, on-disk file valid).
 
-**Build/typecheck note:** both Node packages are **excluded from the root `tsc`**
-(`tsconfig.json` `exclude`) because they use node built-ins; each has its own
-`tsconfig.json` (`types:["node"]` + `@excalidraw/*` paths + a `global.d.ts` mirroring
-`@excalidraw/excalidraw/global` + `/css`). The engine emits no published `dist` to git
-(gitignored); build with `node build.mjs` before running.
+**Build/typecheck note:** both Node packages are **excluded from the root `tsc`** (`tsconfig.json` `exclude`) because they use node built-ins; each has its own `tsconfig.json` (`types:["node"]` + `@excalidraw/*` paths + a `global.d.ts` mirroring `@excalidraw/excalidraw/global` + `/css`). The engine emits no published `dist` to git (gitignored); build with `node build.mjs` before running.
 
 ### 13.4 Desktop live-reload (`a3864b5b`)
 
-When an external tool rewrites the active `.excalidraw`, the desktop app reloads it
-live — **channel is the filesystem, no network port, CSP untouched.**
+When an external tool rewrites the active `.excalidraw`, the desktop app reloads it live — **channel is the filesystem, no network port, CSP untouched.**
 
-- `desktop/src/main.ts`: `fs.watch` on the active file's **parent directory**
-  (survives atomic-rename inode replacement), basename filter, 150 ms debounce
-  (`startWatching`/`stopWatching`, driven from the `setActiveFile` chokepoint;
-  disposed on window `closed` / `window-all-closed`).
-- **Self-write guard:** the app now saves **atomically** and records
-  `lastWrittenHash = sha256(bytes)` before writing, so the watcher ignores its own
-  saves by content — **no time window**, so an external change is never masked by a
-  recent save.
-- **Conflict policy** (`handleExternalChange`): clean scene → `strl:external-change`
-  (silent reload); dirty scene → native Reload/Keep-mine prompt (never clobbers);
-  deleted-on-disk → `strl:external-removed` toast, scene kept.
-- Renderer (`useDesktopIntegration.ts`) factors `applyScene()`
-  (`loadFromBlob → updateScene → addFiles → markSaved`) so a reload resets the dirty
-  baseline. Verify the mechanism: `node desktop/watch-smoke.mjs`.
+- `desktop/src/main.ts`: `fs.watch` on the active file's **parent directory** (survives atomic-rename inode replacement), basename filter, 150 ms debounce (`startWatching`/`stopWatching`, driven from the `setActiveFile` chokepoint; disposed on window `closed` / `window-all-closed`).
+- **Self-write guard:** the app now saves **atomically** and records `lastWrittenHash = sha256(bytes)` before writing, so the watcher ignores its own saves by content — **no time window**, so an external change is never masked by a recent save.
+- **Conflict policy** (`handleExternalChange`): clean scene → `strl:external-change` (silent reload); dirty scene → native Reload/Keep-mine prompt (never clobbers); deleted-on-disk → `strl:external-removed` toast, scene kept.
+- Renderer (`useDesktopIntegration.ts`) factors `applyScene()` (`loadFromBlob → updateScene → addFiles → markSaved`) so a reload resets the dirty baseline. Verify the mechanism: `node desktop/watch-smoke.mjs`.
 
 ### 13.5 In-app AI panel (BYO LLM) + CSP allowlist (`a79a81a2`)
 
-Revives the surviving `TTDDialog` text-to-diagram pipeline as a local-first,
-bring-your-own-model feature (web + desktop). **AI is OFF until configured.**
+Revives the surviving `TTDDialog` text-to-diagram pipeline as a local-first, bring-your-own-model feature (web + desktop). **AI is OFF until configured.**
 
-- `excalidraw-app/data/aiSettings.ts` — localStorage config (endpoint, key, model,
-  optional image endpoint/model). `isAiConfigured()` gates everything. On desktop,
-  saving derives `new URL(endpoint).origin` and calls `strlDesktop.setAiOrigins()`.
-- `excalidraw-app/data/byoStreamFetch.ts` — **standard OpenAI** `chat/completions` SSE
-  parser returning the `OnTextSubmitRetValue` contract. *(The library's
-  `TTDStreamFetch` speaks a bespoke hosted-backend SSE shape and would silently fail —
-  do NOT reuse it for BYO endpoints.)* System prompt asks for ONLY a Mermaid diagram;
-  ```` ```mermaid ```` fences stripped defensively.
-- `AIComponents.tsx` renders `<TTDDialog onTextSubmit persistenceAdapter={TTDIndexedDBAdapter}>`;
-  `AISettingsDialog.tsx` is the config UI (Menu → **AI settings**, `brainIcon`).
-  `App.tsx` renders both inside `<Excalidraw>` and passes `aiEnabled={isAiConfigured()}`
-  (false hides the trigger/commands; the host `<TTDDialog>` supersedes LayerUI's
-  `__fallback` via `withInternalFallback`).
-- **Desktop CSP is now settings-driven** (`main.ts` `buildCSP(aiOrigins)` replaced the
-  const): default strict (`connect-src 'self' data: blob:`); when AI is enabled, ONLY
-  the configured origin(s) are appended to `connect-src`/`img-src`. `strl:set-ai-origins`
-  validates http(s) origins, persists them (`ai-origins.json` in userData), and reloads
-  the window so the new document CSP applies (scene restores from localStorage). **The
-  three inline-script sha256 hashes are unchanged** (§12.3 / STRL_SMOKE stays valid).
+- `excalidraw-app/data/aiSettings.ts` — localStorage config (endpoint, key, model, optional image endpoint/model). `isAiConfigured()` gates everything. On desktop, saving derives `new URL(endpoint).origin` and calls `strlDesktop.setAiOrigins()`.
+- `excalidraw-app/data/byoStreamFetch.ts` — **standard OpenAI** `chat/completions` SSE parser returning the `OnTextSubmitRetValue` contract. _(The library's `TTDStreamFetch` speaks a bespoke hosted-backend SSE shape and would silently fail — do NOT reuse it for BYO endpoints.)_ System prompt asks for ONLY a Mermaid diagram; ` ```mermaid ` fences stripped defensively.
+- `AIComponents.tsx` renders `<TTDDialog onTextSubmit persistenceAdapter={TTDIndexedDBAdapter}>`; `AISettingsDialog.tsx` is the config UI (Menu → **AI settings**, `brainIcon`). `App.tsx` renders both inside `<Excalidraw>` and passes `aiEnabled={isAiConfigured()}` (false hides the trigger/commands; the host `<TTDDialog>` supersedes LayerUI's `__fallback` via `withInternalFallback`).
+- **Desktop CSP is now settings-driven** (`main.ts` `buildCSP(aiOrigins)` replaced the const): default strict (`connect-src 'self' data: blob:`); when AI is enabled, ONLY the configured origin(s) are appended to `connect-src`/`img-src`. `strl:set-ai-origins` validates http(s) origins, persists them (`ai-origins.json` in userData), and reloads the window so the new document CSP applies (scene restores from localStorage). **The three inline-script sha256 hashes are unchanged** (§12.3 / STRL_SMOKE stays valid).
 
 Verify: `pnpm test:typecheck` + `pnpm -C desktop build:main` + `pnpm -C excalidraw-app build`
-+ eslint. The live chat→LLM→Mermaid→insert flow needs a running model to exercise
-end-to-end; it's contract-matched against the intact library pipeline.
+
+- eslint. The live chat→LLM→Mermaid→insert flow needs a running model to exercise end-to-end; it's contract-matched against the intact library pipeline.
 
 ### 13.6 New IPC channels (extends §9)
 
 | Channel | Dir | Payload | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `strl:external-change` | main→renderer | `{name, contents, path}` | live reload of the active file (clean, or user chose Reload) |
 | `strl:external-removed` | main→renderer | `{name}` | active file deleted/renamed on disk → toast, scene kept |
 | `strl:set-ai-origins` | renderer→main | `string[]` | set the CSP AI-endpoint allowlist (validated, persisted, window reload) |
 
-### 13.7 Held / deferred (AI)
+### 13.7 In-app AI image generation (BYO OpenAI-Images)
 
-- In-app **AI image-generation UI** (a button/command): the engine + MCP `generate_image`
-  cover it for the external-tool path; the in-app trigger is a follow-up
-  (`aiSettings.isImageGenConfigured()` + `byoImageGen` are scaffolded for it).
+The in-app image-gen trigger that §13.5 left as a follow-up — built and wired (web + desktop).
+
+- `excalidraw-app/data/byoImageGen.ts` — `generateImage()` POSTs the OpenAI-Images shape (`{model, prompt, n, size, response_format:"b64_json"}`) to the user's configured image endpoint and returns a PNG **data URL**; `insertGeneratedImage()` registers the `BinaryFileData`, builds an `image` element via `convertToExcalidrawElements` (imported from `@excalidraw/element/transform`, same path the engine uses — keeps the Node smoke bundle-able), appends it, selects it, and `scrollToContent`s to it. Errors map to `RequestError`; aborts surface `AbortError` (dialog ignores it).
+- `excalidraw-app/components/AIImageDialog.tsx` — prompt box + Generate (Ctrl+Enter), cancel aborts the request. `App.tsx` renders it; `AppMainMenu.tsx` shows the **Generate image (AI)…** item (`ImageIcon`) **only when `isImageGenConfigured()`**.
+- The image embeds as a data URL (no external `url` refs that would phone home on reopen); on desktop the image endpoint origin is already in the CSP allowlist via `aiAllowedOrigins` (`aiSettings.ts` includes `imageEndpoint` when deriving origins).
+
+### 13.8 Runtime verification harnesses
+
+Closes the gaps §13.5 couldn't reach without a live model/Electron. All zero-dep, Node 22 globals (`WebSocket`/`fetch`/`http`), run against the **real packaged app** (no install):
+
+- `excalidraw-app/byo-stream-smoke.mjs` — bundles `byoStreamFetch` and drives it against a mock OpenAI **SSE** server: request shape (system prompt prepended), ` ```mermaid ` fence strip, `onChunk`/`onStreamCreated`, HTTP-error → `RequestError(status)`, abort → 499. **5/5.**
+- `excalidraw-app/byo-image-smoke.mjs` — same pattern for `generateImage` vs a mock OpenAI-Images server: request shape, b64→data-URL, HTTP error, missing-b64 → 502, abort. **5/5.**
+- `desktop/cdp-runtime-smoke.mjs` — drives the unpacked packaged binary over the **Chrome DevTools Protocol** under Xvfb: live-reload (clean) verified by **sampling rendered canvas pixels**, dirty **no-clobber** (mouse-drag edit → external write → scene preserved + native conflict prompt), external-removed toast, and **settings-driven CSP** (foreign origin blocked by default; permitted only after `setAiOrigins`, proven with a local server hit). **6/6.** Portable boot smoke: `STRL_SMOKE=1` on the AppImage → `{hasEditor:true, dark:true}`.
+- Gotcha: the dev environment sets `ELECTRON_RUN_AS_NODE=1` (Electron runs as Node, rejects chromium flags) — GUI runs use `env -u ELECTRON_RUN_AS_NODE`. `window.h` is dev/test-only (absent in the production renderer); production observables are `window.__strlIsDirty`, toasts, and canvas pixels.
+
+### 13.9 Dependency hardening (security overrides)
+
+Per the supply-chain gate, a Snyk SCA+SAST pass (org `syntheros`) over the AI work surfaced known vulns in the **existing** tree (newly-disclosed CVEs vs pinned versions; SAST on the new source = 0 issues). Runtime/feature-relevant ones are pinned forward via `pnpm.overrides` in the root `package.json`:
+
+| Override | Fixes | Note |
+| --- | --- | --- |
+| `immutable@4`→4.3.8, `immutable@5`→5.1.5 | Prototype Pollution (critical) |  |
+| `lodash-es`→4.18.1 | Arbitrary Code Injection (high) |  |
+| `mermaid`→11.15.0 | Arbitrary Code Injection (med) | **on the AI panel's LLM→mermaid path** |
+| `ajv@8`→8.18.0 | ReDoS (high) | MCP SDK runtime. Scoped to `@8` — a blanket `ajv` override breaks electron-builder's `@develar/schema-utils` (needs ajv 6.x) |
+| `fast-uri`→3.1.2, `qs`→6.15.2 | traversal / DoS (high) | MCP SDK transitive |
+
+Remaining Snyk highs are **build-tooling only** (`vite`, `rollup`, `minimatch`, `picomatch`, `brace-expansion`) — exploitable only at build time with untrusted input, out of scope for a local-first app built from trusted source. Re-verified after overrides: typecheck, all 5 node smokes, renderer + AppImage builds, boot smoke, CDP 6/6 — nothing broke.
+
+### 13.10 Held / deferred (AI)
+
 - Chat-driven **edit-existing depth** beyond regenerate-and-insert.
-- Spawning the MCP server **from the Electron main process** (self-advertising desktop
-  target) — v1 ships the server as a standalone node bin.
-- OS keychain for the API key (currently localStorage; sent only to the configured,
-  CSP-gated origin).
+- Spawning the MCP server **from the Electron main process** (self-advertising desktop target) — v1 ships the server as a standalone node bin.
+- OS keychain for the API key (currently localStorage; sent only to the configured, CSP-gated origin).

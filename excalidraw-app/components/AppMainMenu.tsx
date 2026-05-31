@@ -1,4 +1,8 @@
-import { brainIcon, eyeIcon } from "@excalidraw/excalidraw/components/icons";
+import {
+  brainIcon,
+  eyeIcon,
+  ImageIcon,
+} from "@excalidraw/excalidraw/components/icons";
 import { MainMenu } from "@excalidraw/excalidraw/index";
 import React from "react";
 
@@ -16,6 +20,9 @@ export const AppMainMenu: React.FC<{
   refresh: () => void;
   // STRL: open the BYO AI configuration dialog.
   onOpenAISettings: () => void;
+  // STRL: open the BYO AI image-generation dialog (shown only when configured).
+  onOpenAIImage: () => void;
+  imageGenEnabled: boolean;
 }> = React.memo((props) => {
   // STRL: on desktop, Open/Save go through the native File menu (Ctrl+O / Ctrl+S
   // → strl IPC), which tracks the active file and unsaved state. Hide the
@@ -35,6 +42,11 @@ export const AppMainMenu: React.FC<{
       <MainMenu.Item icon={brainIcon} onSelect={props.onOpenAISettings}>
         AI settings…
       </MainMenu.Item>
+      {props.imageGenEnabled && (
+        <MainMenu.Item icon={ImageIcon} onSelect={props.onOpenAIImage}>
+          Generate image (AI)…
+        </MainMenu.Item>
+      )}
       {isDevEnv() && (
         <MainMenu.Item
           icon={eyeIcon}

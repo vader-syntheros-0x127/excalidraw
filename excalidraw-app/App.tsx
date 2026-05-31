@@ -66,13 +66,14 @@ import { Provider, useAtomValue, appJotaiStore } from "./app-jotai";
 import { STORAGE_KEYS, SYNC_BROWSER_TABS_TIMEOUT } from "./app_constants";
 import { AIComponents } from "./components/AIComponents"; // STRL: in-app AI panel
 import { AISettingsDialog } from "./components/AISettingsDialog"; // STRL
+import { AIImageDialog } from "./components/AIImageDialog"; // STRL
 import { AppFooter } from "./components/AppFooter";
 import { AppMainMenu } from "./components/AppMainMenu";
 import { AppWelcomeScreen } from "./components/AppWelcomeScreen";
 import { StrlExportButton } from "./components/StrlExportButton"; // STRL: prominent export button
 import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
-import { isAiConfigured } from "./data/aiSettings"; // STRL
+import { isAiConfigured, isImageGenConfigured } from "./data/aiSettings"; // STRL
 
 import { updateStaleImageStatuses } from "./data/FileManager";
 import { FileStatusStore } from "./data/fileStatusStore";
@@ -221,6 +222,8 @@ const ExcalidrawWrapper = () => {
   const [errorMessage, setErrorMessage] = useState("");
   // STRL: in-app AI settings dialog open state (closing re-evaluates aiEnabled).
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  // STRL: in-app AI image-generation dialog open state.
+  const [aiImageOpen, setAiImageOpen] = useState(false);
 
   const { editorTheme, appTheme, setAppTheme } = useHandleAppTheme();
 
@@ -642,12 +645,20 @@ const ExcalidrawWrapper = () => {
           setTheme={(theme) => setAppTheme(theme)}
           refresh={() => forceRefresh((prev) => !prev)}
           onOpenAISettings={() => setAiSettingsOpen(true)}
+          onOpenAIImage={() => setAiImageOpen(true)}
+          imageGenEnabled={isImageGenConfigured()}
         />
         {/* STRL: in-app text-to-diagram panel (BYO LLM). Trigger is gated by
             aiEnabled above; the host TTDDialog supersedes LayerUI's fallback. */}
         <AIComponents />
         {aiSettingsOpen && (
           <AISettingsDialog onClose={() => setAiSettingsOpen(false)} />
+        )}
+        {aiImageOpen && (
+          <AIImageDialog
+            excalidrawAPI={excalidrawAPI}
+            onClose={() => setAiImageOpen(false)}
+          />
         )}
         <AppWelcomeScreen />
         <OverwriteConfirmDialog>
