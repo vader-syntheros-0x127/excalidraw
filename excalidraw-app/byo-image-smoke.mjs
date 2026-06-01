@@ -48,6 +48,8 @@ const { generateImage } = await import(pathToFileURL(outfile).href);
 
 const B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 let lastBody = null;
+// deepcode ignore HttpToHttps: loopback-only test fixture mocking an image-gen
+// endpoint on 127.0.0.1; TLS is unnecessary (and absent by design) — not prod code.
 const server = http.createServer((req, res) => {
   const mode = new URL(req.url, "http://x").searchParams.get("mode");
   let raw = "";

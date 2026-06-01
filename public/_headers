@@ -1,2 +1,22 @@
+# STRL: security response headers for a hosted web build (Netlify / Cloudflare
+# Pages "_headers" format). This is the AUTHORITATIVE strong CSP for the web app
+# — it carries the directives a <meta> CSP cannot (frame-ancestors, HSTS) and
+# supersedes the in-document meta baseline when a host applies it.
+#
+# Notes:
+#  - script-src keeps 'unsafe-inline' because a static build cannot nonce its
+#    build-tool-injected inline scripts. To go nonce/hash-strict, serve from a
+#    templating layer that injects a per-response nonce.
+#  - connect-src allows https: so a user-configured BYO AI endpoint is reachable
+#    (the key lives in-browser; the endpoint is arbitrary by design).
+#  - frame-src https: keeps YouTube/Vimeo embeds working.
+#  - dropped upstream's blanket "Access-Control-Allow-Origin: *" — this
+#    local-first fork has no public deployment that needs cross-origin reads.
+#  - HSTS is inert over plain http; harmless to send. No "preload" (unregistered).
 /*
-  Access-Control-Allow-Origin: *
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' data: blob: https:; worker-src 'self' blob:; media-src 'self' blob:; frame-src https:; manifest-src 'self'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains

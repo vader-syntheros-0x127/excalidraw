@@ -8,17 +8,12 @@ export class ExcalidrawFontFace {
   public readonly urls: URL[] | DataURL[];
   public readonly fontFace: FontFace;
 
-  // STRL: the desktop build is fully local (all fonts bundled), so the remote
-  // esm.sh fallback is compiled out entirely — esbuild folds this to "" when
-  // VITE_APP_DESKTOP is set, dropping the esm.sh string from the bundle.
-  private static readonly ASSETS_FALLBACK_URL =
-    import.meta.env.VITE_APP_DESKTOP === "true"
-      ? ""
-      : `https://esm.sh/${
-          import.meta.env.PKG_NAME
-            ? `${import.meta.env.PKG_NAME}@${import.meta.env.PKG_VERSION}` // is provided during package build
-            : "@excalidraw/excalidraw" // fallback to the latest package version (i.e. for app)
-        }/dist/prod/`;
+  // STRL: this fork bundles every font locally for BOTH the web and desktop
+  // builds (self-hosted via EXCALIDRAW_ASSET_PATH = window.origin) and runs under
+  // a strict `font-src 'self'` CSP, so the remote esm.sh fallback is removed
+  // entirely — the app never phones home for fonts. (Upstream keeps the esm.sh
+  // fallback for its hosted web app, where fonts come from a shared CDN.)
+  private static readonly ASSETS_FALLBACK_URL = "";
 
   constructor(family: string, uri: string, descriptors?: FontFaceDescriptors) {
     this.urls = ExcalidrawFontFace.createUrls(uri);
@@ -169,11 +164,11 @@ export class ExcalidrawFontFace {
       });
     }
 
-    // fallback url for bundled fonts
-    // STRL: the desktop build bundles every font locally and runs under a strict
-    // self-only CSP — never append the remote esm.sh fallback there, so the
-    // packaged app makes zero network requests for fonts.
-    if (import.meta.env.VITE_APP_DESKTOP !== "true") {
+    // STRL: only append a remote fallback when one is configured. This fork
+    // self-hosts all fonts (ASSETS_FALLBACK_URL is empty), so nothing is
+    // appended and the FontFace src stays `self`-only — no esm.sh phone-home and
+    // no CSP violations. (An empty base would also throw in `new URL()`.)
+    if (ExcalidrawFontFace.ASSETS_FALLBACK_URL) {
       urls.push(new URL(assetUrl, ExcalidrawFontFace.ASSETS_FALLBACK_URL));
     }
 

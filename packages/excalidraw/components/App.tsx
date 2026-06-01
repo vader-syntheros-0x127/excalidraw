@@ -893,12 +893,14 @@ class App extends React.Component<AppProps, AppState> {
               source = iframe.contentWindow;
             }
           }
+          // STRL: reply to the validated embed origin (event.origin is
+          // "https://player.vimeo.com" in this case) rather than "*" (CWE-942).
           source?.postMessage(
             JSON.stringify({
               method: data.value ? "play" : "pause",
               value: true,
             }),
-            "*",
+            event.origin,
           );
         }
         break;
@@ -1416,6 +1418,12 @@ class App extends React.Component<AppProps, AppState> {
       return true;
     }
 
+    // STRL: target embed-control postMessages at the embed's own origin instead
+    // of "*" — closes the permissive cross-origin policy (CWE-942). iframe.src is
+    // a trusted, app-generated YouTube/Vimeo URL, so its origin is exact (and
+    // covers youtube-nocookie.com too).
+    const embedOrigin = new URL(iframe.src).origin;
+
     if (iframe.src.includes("youtube")) {
       const state = YOUTUBE_VIDEO_STATES.get(iframeLikeElement.id);
       if (!state) {
@@ -1428,7 +1436,7 @@ class App extends React.Component<AppProps, AppState> {
             event: "listening",
             id: iframeLikeElement.id,
           }),
-          "*",
+          embedOrigin,
         );
       }
       switch (state) {
@@ -1440,7 +1448,7 @@ class App extends React.Component<AppProps, AppState> {
               func: "pauseVideo",
               args: "",
             }),
-            "*",
+            embedOrigin,
           );
           break;
         default:
@@ -1450,7 +1458,7 @@ class App extends React.Component<AppProps, AppState> {
               func: "playVideo",
               args: "",
             }),
-            "*",
+            embedOrigin,
           );
       }
     }
@@ -1460,7 +1468,7 @@ class App extends React.Component<AppProps, AppState> {
         JSON.stringify({
           method: "paused", //video play/pause in onWindowMessage handler
         }),
-        "*",
+        embedOrigin,
       );
     }
 

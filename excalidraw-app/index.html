@@ -2,6 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- STRL: web-only Content-Security-Policy (baseline defense-in-depth).
+         Gated out of the desktop build, which enforces a stricter CSP via the
+         Electron session (with pinned inline-script hashes). A <meta> CSP cannot
+         express frame-ancestors / HSTS, and a static build cannot nonce its
+         inline scripts, so the *authoritative* strong policy is the HTTP header
+         in /public/_headers (applied by the host). This meta still blocks
+         external-origin scripts, object/embed, and base-uri hijacking. -->
+    <% if (typeof VITE_APP_DESKTOP == 'undefined' || VITE_APP_DESKTOP != 'true')
+    { %>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' data: blob: https:; worker-src 'self' blob:; media-src 'self' blob:; frame-src https:; manifest-src 'self'; form-action 'self'"
+    />
+    <% } %>
     <!-- STRL: branding -->
     <title>STRL-Ideate</title>
     <meta
@@ -95,13 +109,8 @@
       }
     </style>
 
-    <!-- Warmup the connection for Google fonts -->
-    <!-- STRL: skip cross-origin preconnects in the desktop build (local-only, strict CSP) -->
-    <% if (typeof VITE_APP_DESKTOP == 'undefined' || VITE_APP_DESKTOP != 'true')
-    { %>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <% } %>
+    <!-- STRL: no Google-fonts preconnect — every font is self-hosted (web and
+         desktop), so there is no cross-origin font origin to warm up. -->
 
     <!------------------------------------------------------------------------->
     <% if (typeof PROD != 'undefined' && PROD == true) { %>

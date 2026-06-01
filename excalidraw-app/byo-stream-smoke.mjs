@@ -52,6 +52,8 @@ const { byoStreamFetch, MERMAID_SYSTEM_PROMPT } = await import(
 // ── 2. mock OpenAI-compatible server ────────────────────────────────────────
 // Behaviour is selected per-request by the `mode` query param.
 let lastBody = null;
+// deepcode ignore HttpToHttps: loopback-only test fixture mocking an OpenAI
+// endpoint on 127.0.0.1; TLS is unnecessary (and absent by design) — not prod code.
 const server = http.createServer((req, res) => {
   const mode = new URL(req.url, "http://x").searchParams.get("mode");
   let raw = "";

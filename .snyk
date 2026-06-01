@@ -1,0 +1,28 @@
+# Snyk (https://snyk.io) policy file.
+# STRL: documented, time-boxed acceptances for residual findings that have no
+# clean fix and pose no shipped-artifact risk. Reviewed as part of the standing
+# supply-chain gate; re-evaluate on expiry.
+version: v1.25.0
+ignore:
+  SNYK-JS-INFLIGHT-6095116:
+    - "*":
+        reason: >-
+          Dev-only, build-time-only transitive of electron-builder. After the
+          @electron/asar 4.x override removes the mac-universal path, the only
+          remaining path is the Windows Squirrel installer
+          (electron-builder-squirrel-windows > electron-winstaller > temp@0.9.4
+          > rimraf@2 > glob@7 > inflight). temp is already at its latest and
+          still hard-deps rimraf@2; rimraf@3 still pulls glob@7, and rimraf@4
+          drops the callback API temp needs — so no clean override exists.
+          inflight is never installed on our Linux/macOS build pipeline and
+          never enters a shipped artifact (installer tooling only). The package
+          is abandoned at 1.0.6 with no fixed release. Clears when electron
+          -builder adopts @electron/asar@4 / a glob@9+ rimraf internally.
+        expires: 2026-12-02T00:00:00.000Z
+# STRL: exclude the loopback AI-endpoint mock servers from SAST. They are test
+# fixtures (not shipped, not prod code) that bind plain HTTP on 127.0.0.1 by
+# design; "HTTP instead of HTTPS" (CWE-319) does not apply to a localhost mock.
+exclude:
+  code:
+    - excalidraw-app/byo-image-smoke.mjs
+    - excalidraw-app/byo-stream-smoke.mjs

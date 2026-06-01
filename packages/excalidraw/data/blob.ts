@@ -255,19 +255,24 @@ export const canvasToBlob = async (
   });
 };
 
-/** generates SHA-1 digest from supplied file (if not supported, falls back
-    to a 40-char base64 random id) */
+/** generates a content-addressed digest from the supplied file (if not
+    supported, falls back to a random id of matching length).
+    STRL: upgraded SHA-1 -> SHA-256 to clear the weak-hash scan finding
+    (CWE-916). The id is only used for content-addressed dedup of embedded
+    files, not security — but SHA-256 is equally available via WebCrypto, so
+    there is no reason to keep the weaker primitive. Existing scenes are
+    unaffected (file ids are persisted, never recomputed on load). */
 export const generateIdFromFile = async (file: File): Promise<FileId> => {
   try {
     const hashBuffer = await window.crypto.subtle.digest(
-      "SHA-1",
+      "SHA-256",
       await blobToArrayBuffer(file),
     );
     return bytesToHexString(new Uint8Array(hashBuffer)) as FileId;
   } catch (error: any) {
     console.error(error);
-    // length 40 to align with the HEX length of SHA-1 (which is 160 bit)
-    return nanoid(40) as FileId;
+    // length 64 to align with the HEX length of SHA-256 (which is 256 bit)
+    return nanoid(64) as FileId;
   }
 };
 
