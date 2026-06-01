@@ -962,15 +962,21 @@ The three `sha256-…` hashes in `desktop/src/main.ts:35–49` are over the **po
 4. **Renderer consumer** (`excalidraw-app/useDesktopIntegration.ts`): register the handler **before** `desktop.ready()` so it's live when main flushes buffered events.
 5. Update the **IPC contract table** in §9 of this doc.
 
-### 12.6 Cut a desktop release
+### 12.6 Cut a desktop release (LOCAL — no CI)
 
-The desktop app uses its own version line (`desktop/package.json`), **separate** from the inherited upstream library tags (`v0.16`–`v0.18`).
+Releases are built **locally**, not via GitHub Actions. The desktop app uses its own version line (`desktop/package.json`), **separate** from the inherited upstream library tags (`v0.16`–`v0.18`).
 
-1. Bump `desktop/package.json` `version` (e.g. `0.2.0`). This drives the installer artifact names (`STRL-Ideate-<version>.AppImage`, etc.).
-2. Commit on master through the normal gate.
-3. Tag with the **`strl-v*`** prefix and push the tag: `git tag -a strl-v0.2.0 -m "…" && git push origin strl-v0.2.0`. The `strl-v*` prefix is deliberate — it never collides with an upstream-sync `v*` tag.
-4. Pushing the tag triggers **`.github/workflows/desktop-build.yml`** (matrix: linux AppImage+deb, win NSIS+portable, mac dmg), which uploads **unsigned** installer artifacts + SHA-256 sidecars to the workflow run (14-day retention). It does **not** create a GitHub Release or publish an auto-update feed — those stay HELD (§11) until signing/notarization are wired.
-5. (Requires repo Actions enabled. To build without tagging, run the workflow via **workflow_dispatch**.)
+1. **Bump** `desktop/package.json` `version` (e.g. `0.2.0`) — drives the installer artifact names (`STRL-Ideate-<version>.AppImage`, etc.). Commit on master.
+2. **Security gate first** (always, before building): Snyk SCA + Code (org `syntheros`) → green; hardened install path (§7).
+3. **Build on each target OS** (cross-building is unreliable — Linux can't build win/mac):
+   - Linux: `pnpm -C desktop dist:linux` → `STRL-Ideate-<v>.AppImage` + `.deb`
+   - Windows (on a Windows box): `pnpm -C desktop dist:win` → NSIS + portable `.exe`
+   - macOS (on a Mac): `pnpm -C desktop dist:mac` → `.dmg` Output lands in `desktop/dist-installers/` (git-ignored).
+4. **Verify the artifact**: boot smoke (`STRL_SMOKE=1` on the AppImage → `hasEditor:true`) + the CDP runtime harness (`DISPLAY=:99 node cdp-runtime-smoke.mjs` from `desktop/` → 7/7, incl. the save-target security regression).
+5. **Checksums**: `sha256sum desktop/dist-installers/*` → ship each `.sha256` alongside its installer.
+6. **Tag** the release: `git tag -a strl-v<v> -m "…" && git push origin strl-v<v>` (marks the version; the `strl-v*` prefix never collides with an upstream-sync `v*` tag). Distribute the built installers out-of-band.
+
+Builds are **unsigned**; signing / notarization / auto-update stay HELD (§11). `.github/workflows/desktop-build.yml` is kept only as an optional manual (`workflow_dispatch`) fallback and is **not** tag- or push-triggered.
 
 ---
 

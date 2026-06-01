@@ -11,14 +11,12 @@
 name: Desktop build
 
 on:
+  # STRL releases are built LOCALLY (no GitHub Actions) — see STRL-CUSTOMIZATIONS
+  # §12.6 "Cut a desktop release". This workflow is kept ONLY as an optional
+  # manual fallback (workflow_dispatch) for anyone who later enables Actions; it
+  # is intentionally NOT triggered by tags or pushes. Still unsigned, NO publish,
+  # NO GitHub Release, NO auto-update.
   workflow_dispatch: {}
-  # STRL releases are tagged `strl-v*` (distinct from the inherited upstream
-  # `v*` tags, so this never fires on an upstream-sync tag). Pushing one builds
-  # the unsigned installer matrix as downloadable artifacts (still NO publish /
-  # NO GitHub release / NO auto-update — see the notes above).
-  push:
-    tags:
-      - "strl-v*"
 
 concurrency:
   group: desktop-build-${{ github.ref }}
