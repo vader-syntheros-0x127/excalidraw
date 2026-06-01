@@ -12,10 +12,13 @@ name: Desktop build
 
 on:
   workflow_dispatch: {}
-  # Opt-in later: build installers when a version tag is pushed.
-  # push:
-  #   tags:
-  #     - "v*"
+  # STRL releases are tagged `strl-v*` (distinct from the inherited upstream
+  # `v*` tags, so this never fires on an upstream-sync tag). Pushing one builds
+  # the unsigned installer matrix as downloadable artifacts (still NO publish /
+  # NO GitHub release / NO auto-update — see the notes above).
+  push:
+    tags:
+      - "strl-v*"
 
 concurrency:
   group: desktop-build-${{ github.ref }}

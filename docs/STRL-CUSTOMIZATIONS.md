@@ -962,6 +962,16 @@ The three `sha256-…` hashes in `desktop/src/main.ts:35–49` are over the **po
 4. **Renderer consumer** (`excalidraw-app/useDesktopIntegration.ts`): register the handler **before** `desktop.ready()` so it's live when main flushes buffered events.
 5. Update the **IPC contract table** in §9 of this doc.
 
+### 12.6 Cut a desktop release
+
+The desktop app uses its own version line (`desktop/package.json`), **separate** from the inherited upstream library tags (`v0.16`–`v0.18`).
+
+1. Bump `desktop/package.json` `version` (e.g. `0.2.0`). This drives the installer artifact names (`STRL-Ideate-<version>.AppImage`, etc.).
+2. Commit on master through the normal gate.
+3. Tag with the **`strl-v*`** prefix and push the tag: `git tag -a strl-v0.2.0 -m "…" && git push origin strl-v0.2.0`. The `strl-v*` prefix is deliberate — it never collides with an upstream-sync `v*` tag.
+4. Pushing the tag triggers **`.github/workflows/desktop-build.yml`** (matrix: linux AppImage+deb, win NSIS+portable, mac dmg), which uploads **unsigned** installer artifacts + SHA-256 sidecars to the workflow run (14-day retention). It does **not** create a GitHub Release or publish an auto-update feed — those stay HELD (§11) until signing/notarization are wired.
+5. (Requires repo Actions enabled. To build without tagging, run the workflow via **workflow_dispatch**.)
+
 ---
 
 ## 13. AI authoring — MCP server + in-app panel
