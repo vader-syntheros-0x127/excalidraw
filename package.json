@@ -116,7 +116,9 @@
       "react": "19.2.6",
       "react-dom": "19.2.6",
       "jotai": "2.20.0",
-      "eslint-plugin-react": "7.37.5"
+      "eslint-plugin-react": "7.37.5",
+      "workbox-build": "7.4.1",
+      "workbox-window": "7.4.1"
     },
     "onlyBuiltDependencies": [
       "esbuild",
