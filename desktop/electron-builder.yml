@@ -41,8 +41,9 @@ linux:
   description: STRL-Ideate — a local-first whiteboard for sketching diagrams.
 
 # ── Windows (NSIS installer) ────────────────────────────────────────────────
-# Build on a windows-latest runner. Cross-building on Linux needs wine (absent
-# on the dev host) for rcedit icon/version stamping.
+# Cross-builds on Linux via Wine (wine 9.0 is installed on the dev host) — used
+# for NSIS packaging + rcedit icon/version stamping; a windows-latest runner
+# also works. Only macOS genuinely cannot be cross-built from Linux.
 # Signing is HELD: with no CSC_* env set, electron-builder produces a valid
 # UNSIGNED installer. Provisioning a cert later is env-only, no YAML change.
 win:

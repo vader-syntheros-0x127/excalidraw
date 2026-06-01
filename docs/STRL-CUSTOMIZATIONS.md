@@ -968,10 +968,10 @@ Releases are built **locally**, not via GitHub Actions. The desktop app uses its
 
 1. **Bump** `desktop/package.json` `version` (e.g. `0.2.0`) — drives the installer artifact names (`STRL-Ideate-<version>.AppImage`, etc.). Commit on master.
 2. **Security gate first** (always, before building): Snyk SCA + Code (org `syntheros`) → green; hardened install path (§7).
-3. **Build on each target OS** (cross-building is unreliable — Linux can't build win/mac):
+3. **Build** (Linux **and** Windows build on this Linux host; only macOS needs a Mac):
    - Linux: `pnpm -C desktop dist:linux` → `STRL-Ideate-<v>.AppImage` + `.deb`
-   - Windows (on a Windows box): `pnpm -C desktop dist:win` → NSIS + portable `.exe`
-   - macOS (on a Mac): `pnpm -C desktop dist:mac` → `.dmg` Output lands in `desktop/dist-installers/` (git-ignored).
+   - Windows: `CSC_IDENTITY_AUTO_DISCOVERY=false pnpm -C desktop dist:win` → NSIS `setup.exe` + `portable.exe` (cross-built via **Wine 9.0**, installed on the dev host — used for NSIS + rcedit version/icon stamping)
+   - macOS (on a Mac only): `pnpm -C desktop dist:mac` → `.dmg` Output lands in `desktop/dist-installers/` (git-ignored).
 4. **Verify the artifact**: boot smoke (`STRL_SMOKE=1` on the AppImage → `hasEditor:true`) + the CDP runtime harness (`DISPLAY=:99 node cdp-runtime-smoke.mjs` from `desktop/` → 7/7, incl. the save-target security regression).
 5. **Checksums**: `sha256sum desktop/dist-installers/*` → ship each `.sha256` alongside its installer.
 6. **Tag** the release: `git tag -a strl-v<v> -m "…" && git push origin strl-v<v>` (marks the version; the `strl-v*` prefix never collides with an upstream-sync `v*` tag). Distribute the built installers out-of-band.
