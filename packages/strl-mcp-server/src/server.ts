@@ -20,11 +20,6 @@ import {
   getSceneSummary,
 } from "@strl/authoring";
 
-import type {
-  AuthoringScene,
-  ElementQuery,
-  ExcalidrawElementSkeleton,
-} from "@strl/authoring";
 
 import {
   loadExisting,
@@ -35,6 +30,12 @@ import {
 import { generateImageDataURL } from "./generateImage";
 import { loadImageDataURL } from "./image";
 import { TOOL_DEFS } from "./tools";
+
+import type {
+  AuthoringScene,
+  ElementQuery,
+  ExcalidrawElementSkeleton,
+} from "@strl/authoring";
 
 type Args = Record<string, unknown>;
 

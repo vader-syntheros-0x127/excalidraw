@@ -146,7 +146,7 @@ export const useDesktopIntegration = (
           message: "Failed to open file",
           duration: 3000,
         });
-        // eslint-disable-next-line no-console
+         
         console.error("STRL desktop open failed", error);
       }
     };
@@ -167,7 +167,7 @@ export const useDesktopIntegration = (
           message: "Failed to reload external change",
           duration: 3000,
         });
-        // eslint-disable-next-line no-console
+         
         console.error("STRL desktop external reload failed", error);
       }
     };

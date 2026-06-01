@@ -8,12 +8,13 @@
 // We bundle the TS source with the shared node esbuild config (resolves
 // @excalidraw/excalidraw/errors to source), then drive it over a local server.
 // Run:  node excalidraw-app/byo-stream-smoke.mjs
-import esbuild from "esbuild";
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+import esbuild from "esbuild";
 
 import {
   strlAliasPlugin,

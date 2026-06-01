@@ -137,7 +137,7 @@ class CDP {
       userGesture: true,
     });
     if (res.exceptionDetails) {
-      throw new Error("eval exception: " + JSON.stringify(res.exceptionDetails));
+      throw new Error(`eval exception: ${  JSON.stringify(res.exceptionDetails)}`);
     }
     return res.result.value;
   }

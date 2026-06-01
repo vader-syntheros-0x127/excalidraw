@@ -6,12 +6,13 @@
 // covered by the desktop CDP smoke instead.
 //
 // Run:  node excalidraw-app/byo-image-smoke.mjs
-import esbuild from "esbuild";
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+import esbuild from "esbuild";
 
 import {
   strlAliasPlugin,
