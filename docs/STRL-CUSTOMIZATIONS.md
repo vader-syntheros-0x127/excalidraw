@@ -915,8 +915,8 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 | **`gen:types` on pnpm** | `build:esm` still shells `yarn gen:types` | migrate to `pnpm gen:types` |
 | **Dead consts cleanup** | `FIREBASE_STORAGE_PREFIXES` / `ROOM_ID_BYTES` orphaned in `app_constants.ts` | safe to delete (keep `LOCAL_STORAGE_COLLAB`, still live) |
 | **PDF vector export** | PDF is **raster** (jsPDF embeds a PNG; text not selectable) | a vector path would need a different exporter |
-| **Stale `CLAUDE.md`** | documents yarn / Yarn workspaces | update to pnpm |
 | **Non-English rebrand** | only `en.json` rebranded; other locales still say "Excalidraw" | sync translations from upstream |
+| **Upstream README** | `README.md` is still 100% upstream Excalidraw (not STRL-branded) | rebrand if the fork is published; left upstream for merge-ease |
 
 ---
 
@@ -924,7 +924,7 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 
 ### 12.1 Upstream sync
 
-1. **Harden first.** Ensure Aikido Safe Chain is active; never bare-install. Use `pnpm install --frozen-lockfile --ignore-scripts` (only `esbuild`/`electron` are allowed build scripts).
+1. **Harden first.** Ensure Aikido Safe Chain is active (`type pnpm` = shell function); never bypass the wrapper. Use plain **`pnpm install`** run top-level — `onlyBuiltDependencies=[esbuild,electron]` already restricts lifecycle scripts to exactly those two, so **do NOT add `--ignore-scripts`** (it would break the esbuild/electron binaries the build needs). `minimum-release-age=1440` blocks any version <24 h old.
 2. `git fetch upstream`.
 3. `git checkout upstream-sync && git reset --hard upstream/master` to stage upstream's latest.
 4. Create a topic branch off `master` and merge/rebase `upstream-sync` into it. Conflicts will concentrate in: `excalidraw-app/App.tsx` (`renderTopRightUI`, `UIOptions.canvasActions.export`, collab paths — always resolve toward the STRL local-first version) and the **library** files (`ExcalidrawLogo.tsx`, `HelpDialog.tsx`, `en.json`, `MobileMenu.test.tsx.snap`, `ExcalidrawFontFace.ts`, `vite-env.d.ts`, `scripts/woff2/woff2-vite-plugins.js`). Every STRL hunk is `// STRL:`-marked.
