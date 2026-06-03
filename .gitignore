@@ -31,3 +31,6 @@ meta*.json
 # STRL desktop build artifacts
 desktop/renderer
 desktop/dist-installers
+
+# STRL: local MCP diagram workdir (generated .excalidraw scratch)
+/diagrams/
