@@ -125,7 +125,14 @@ export const useDesktopIntegration = (
     // addFiles), so a later failure can't leave main pointing at the wrong file.
     const applyScene = async (contents: string, onApplied?: () => void) => {
       const blob = new Blob([contents], { type: "application/json" });
+      // STRL: theme is a per-VIEWER setting (appState `export: false`), so it is
+      // never stored in a .excalidraw file. loadFromBlob therefore falls back to
+      // the package default (light), and updateScene would apply it — flipping
+      // the editor from the app's dark default to light on every open/reload.
+      // Preserve the editor's current theme so opening a scene keeps it.
+      const currentTheme = excalidrawAPI.getAppState().theme;
       const restored = await loadFromBlob(blob, null, null);
+      restored.appState.theme = currentTheme;
       excalidrawAPI.updateScene(restored);
       onApplied?.();
       if (restored.files) {
@@ -146,7 +153,7 @@ export const useDesktopIntegration = (
           message: "Failed to open file",
           duration: 3000,
         });
-         
+
         console.error("STRL desktop open failed", error);
       }
     };
@@ -167,7 +174,7 @@ export const useDesktopIntegration = (
           message: "Failed to reload external change",
           duration: 3000,
         });
-         
+
         console.error("STRL desktop external reload failed", error);
       }
     };

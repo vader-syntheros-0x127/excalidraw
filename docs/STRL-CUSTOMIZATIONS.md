@@ -524,23 +524,20 @@ The handler (`registerAppProtocol`, `main.ts:132–180`) is registered at `app.w
 
 **Navigation hardening** (`main.ts:806–822`, `web-contents-created`): `setWindowOpenHandler` opens `http(s)` links in the external browser (`shell.openExternal`) and denies all in-app window opens; `will-navigate` is blocked unless the URL is `app://` (prod) or the `DEV_URL` (dev).
 
-### 6.2 Content-Security-Policy (`main.ts:35–49`)
+### 6.2 Content-Security-Policy (`main.ts` `buildCSP` / `getInlineScriptHashes`)
 
 Strict, `self`-only — there are no remote origins because the desktop build bundles fonts locally:
 
 ```
 default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none';
-script-src 'self' 'wasm-unsafe-eval'
-  'sha256-iPtxE0n242JUcLKPr7D09tSIF4FKNSy5jqkeySXxfDY='
-  'sha256-mXvmZWZG6iAZBw0OliHQaJOSMPc9DbQZJaxywImBlQo='
-  'sha256-Kxm9zQ99NqYtDuNSdByEfyFAYVPAqWdmNFx5axumk1w=';
+script-src 'self' 'wasm-unsafe-eval' <sha256 of each inline index.html <script>>;
 style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;
 connect-src 'self' data: blob:; worker-src 'self' blob:; media-src 'self' blob:; manifest-src 'self'
 ```
 
 - `'wasm-unsafe-eval'` is for pica / image-blob-reduce WASM image resize.
 - `style-src 'unsafe-inline'` because Excalidraw applies inline styles heavily.
-- The **three sha256 inline-script hashes** cover the three inline `<script>`s in the **built** desktop renderer `index.html` (see the verified table in §7.1). Dev (Vite) load path is **not** CSP-wrapped.
+- **`script-src` is hash-pinned, derived at runtime.** `getInlineScriptHashes()` reads the **built** renderer `index.html`, extracts each inline `<script>` (dark-mode early paint, the local asset-path setter, `window.name`) and sha256s its exact body — so editing an inline script can never leave a stale hard-coded hash that silently blocks it (the regression fixed in §6.13). It stays strict: a script injected at runtime isn't in the served file, so its hash isn't in the set and it's blocked. Dev (Vite) load path is **not** CSP-wrapped.
 
 ### 6.3 Packaging — `asar:true`
 
@@ -617,7 +614,16 @@ macOS entitlements (`assets/entitlements.mac.plist`): minimal hardened-runtime s
 
 ### 6.12 Smoke-test harness
 
-`STRL_SMOKE=1` (`main.ts:278–301`) polls up to 20× (500 ms) for the editor to mount, captures console errors, prints `{ title, hasEditor, dark, scripts }`, then quits. Expected pass: `{"hasEditor":true,"dark":true}`. Used under xvfb in verification and catches CSP/font/inline-script-hash regressions.
+`STRL_SMOKE=1` (`main.ts`) polls up to 20× (500 ms) for the editor to mount, captures console errors, prints `{ title, hasEditor, dark, scripts, assetPath, excalifont }`, then quits. Expected pass: `{"hasEditor":true,"dark":true,"assetPath":true}`. **`assetPath`** asserts the inline asset-path script actually executed (`typeof window.EXCALIDRAW_ASSET_PATH === "string"`) — the definitive signal that font loading isn't silently CSP-blocked (the §6.13 regression slipped through precisely because the old probe checked only `dark`/`hasEditor`). `excalifont` (did the default canvas font load) is timing-soft. Used under xvfb in verification.
+
+### 6.13 Desktop font + theme fixes (2026-06-03)
+
+Two desktop-only bugs, root-caused (verified-by-hashing + 4-way adversarial verification) and fixed:
+
+- **Canvas fonts fell back to a system font on desktop (but were correct on web).** A commit had edited the comment inside the injected `window.EXCALIDRAW_ASSET_PATH = window.origin` inline script (`// STRL desktop:` → `// STRL:`), changing its sha256 — but the **hard-coded** CSP hash in `main.ts` was never updated. The strict hash-pinned `script-src` (no `'unsafe-inline'`) then **blocked** that script, leaving `EXCALIDRAW_ASSET_PATH` undefined; `ExcalidrawFontFace.createUrls` builds element-font URLs only when it's set (and `ASSETS_FALLBACK_URL` is now `""`), so every canvas FontFace got an empty `src` and never loaded → system fallback. Web was unaffected (its meta-CSP uses `'unsafe-inline'`). The UI font matched on both because the Assistant `@font-face` uses a literal `url(/Assistant-Regular.woff2)`, independent of the asset path. **Fix:** `main.ts` now **derives the CSP script hashes from the built `index.html` at runtime** (`getInlineScriptHashes`, §6.2) instead of hard-coding them, so a script-body edit can't drift again; and the `STRL_SMOKE` probe now asserts `assetPath` (§6.12).
+- **Opening a diagram flipped the editor dark → light.** Theme is a per-**viewer** setting (`appState.ts` `theme: { export: false }`), so it is never stored in a `.excalidraw` file, and the package default is `THEME.LIGHT` (the fork sets dark only via the web-app `editorTheme` prop, not `getDefaultAppState`). `useDesktopIntegration.applyScene` called `loadFromBlob(blob, null, null)` (no `localAppState`), so `restoreAppState` fell back to the light default, and `updateScene` applied `theme: 'light'` — flipping the editor on every open **and** every external/MCP live-reload (both share `applyScene`). **Fix:** `applyScene` captures `excalidrawAPI.getAppState().theme` before load and re-asserts it (`restored.appState.theme = currentTheme`) — package untouched, fork-friendly.
+
+**Verification (full impacted-surface gate):** Snyk SCA baseline + Code **0** (org `syntheros`) · typecheck (desktop + app) · eslint/prettier · AppImage on electron-builder 26.11.1 · boot smoke `{hasEditor:true, dark:true, assetPath:true}` · a CDP check that after opening a scene the canvas font is **Excalifont (loaded)** and the editor **stays dark** · **CDP 7/7** (`cdp-runtime-smoke.mjs`; its two pixel-marker checks were re-pinned to light theme because Excalidraw renders dark mode via a render-time `DARK_THEME_FILTER` that inverts the raw pixels `getImageData` reads — the old assertions had been passing only because of the very theme bug now fixed).
 
 ---
 

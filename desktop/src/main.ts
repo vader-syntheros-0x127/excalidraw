@@ -31,19 +31,27 @@ const APP_SCHEME = "app";
 // persisted), so the strict default is preserved until the user opts in.
 //  - 'wasm-unsafe-eval': pica/image-blob-reduce compile WASM for image resize.
 //  - style 'unsafe-inline': excalidraw relies heavily on inline styles.
-//  - the three script hashes are the inline <script>s in index.html
-//    (dark-mode early paint, local asset-path, window.name). If those change,
-//    recompute (sha256 base64 of each inline script body) or the CSP blocks them
-//    — the STRL_SMOKE check (dark:true / hasEditor:true) will catch a mismatch.
+//  - script-src is hash-pinned. The inline <script>s in index.html (dark-mode
+//    early paint, local asset-path, window.name) are allow-listed by their
+//    sha256, computed from the ACTUAL built index.html at runtime
+//    (getInlineScriptHashes) rather than hard-coded — so editing an inline
+//    script can never leave a stale hash that silently blocks it. (A stale
+//    hard-coded hash previously blocked the asset-path script, leaving
+//    EXCALIDRAW_ASSET_PATH unset and disabling canvas fonts on desktop.) This
+//    stays strict: a script injected at runtime is not in the served file, so
+//    its hash isn't in the set and it's still blocked.
 const buildCSP = (aiOrigins: string[]): string => {
   const extra = aiOrigins.length > 0 ? ` ${aiOrigins.join(" ")}` : "";
+  const scriptHashes = getInlineScriptHashes().join(" ");
   return [
     "default-src 'self'",
     "base-uri 'none'",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'none'",
-    "script-src 'self' 'wasm-unsafe-eval' 'sha256-iPtxE0n242JUcLKPr7D09tSIF4FKNSy5jqkeySXxfDY=' 'sha256-mXvmZWZG6iAZBw0OliHQaJOSMPc9DbQZJaxywImBlQo=' 'sha256-Kxm9zQ99NqYtDuNSdByEfyFAYVPAqWdmNFx5axumk1w='",
+    `script-src 'self' 'wasm-unsafe-eval'${
+      scriptHashes ? ` ${scriptHashes}` : ""
+    }`,
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob:${extra}`,
     "font-src 'self' data:",
@@ -82,6 +90,45 @@ const DEV_URL = process.env.STRL_DESKTOP_DEV_URL;
 const BUILD_DIR = app.isPackaged
   ? path.join(__dirname, "..", "renderer")
   : path.resolve(__dirname, "..", "..", "excalidraw-app", "build");
+
+// STRL: sha256 CSP allow-list for index.html's inline <script>s, derived from
+// the actual built file (cached — the build is immutable at runtime). Computing
+// the hashes here instead of hard-coding them means editing an inline script can
+// never leave a stale hash that silently blocks it, which is what previously
+// disabled EXCALIDRAW_ASSET_PATH (and therefore canvas fonts) on desktop.
+let inlineScriptHashes: string[] | null = null;
+const getInlineScriptHashes = (): string[] => {
+  if (inlineScriptHashes) {
+    return inlineScriptHashes;
+  }
+  const hashes: string[] = [];
+  try {
+    const html = fs.readFileSync(path.join(BUILD_DIR, "index.html"), "utf8");
+    // Inline scripts only (no src=); hash the exact body the browser parses.
+    const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(html)) !== null) {
+      const digest = crypto
+        .createHash("sha256")
+        .update(match[1], "utf8")
+        .digest("base64");
+      hashes.push(`'sha256-${digest}'`);
+    }
+  } catch (error) {
+    console.error(
+      `[strl-desktop] could not read index.html for CSP hashes: ${String(
+        error,
+      )}`,
+    );
+  }
+  if (hashes.length === 0) {
+    console.error(
+      "[strl-desktop] no inline-script hashes computed — inline scripts will be CSP-blocked",
+    );
+  }
+  inlineScriptHashes = hashes;
+  return hashes;
+};
 
 app.setName(APP_NAME);
 
@@ -336,7 +383,10 @@ const createWindow = () => {
       try {
         for (let i = 0; i < 20; i++) {
           probe = await wc.executeJavaScript(
-            `({ title: document.title, hasEditor: !!document.querySelector('.excalidraw'), dark: document.documentElement.classList.contains('dark'), scripts: document.querySelectorAll('script[type=module]').length })`,
+            // assetPath: the inline asset-path script executed (CSP allowed it) —
+            // the definitive signal that font loading isn't silently broken.
+            // excalifont: the default canvas font actually loaded (timing-soft).
+            `({ title: document.title, hasEditor: !!document.querySelector('.excalidraw'), dark: document.documentElement.classList.contains('dark'), scripts: document.querySelectorAll('script[type=module]').length, assetPath: typeof window.EXCALIDRAW_ASSET_PATH === 'string', excalifont: !!(document.fonts && document.fonts.check && document.fonts.check('20px Excalifont')) })`,
           );
           if (probe.hasEditor) {
             break;

@@ -19,9 +19,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const BIN = path.resolve(
-  "dist-installers/linux-unpacked/strl-ideate-desktop",
-);
+const BIN = path.resolve("dist-installers/linux-unpacked/strl-ideate-desktop");
 const PORT = 9223;
 const CSP_ORIGIN_PORT = 9911;
 const CSP_ORIGIN = `http://127.0.0.1:${CSP_ORIGIN_PORT}`;
@@ -109,7 +107,9 @@ class CDP {
       if (msg.id && this.pending.has(msg.id)) {
         const { resolve, reject } = this.pending.get(msg.id);
         this.pending.delete(msg.id);
-        msg.error ? reject(new Error(JSON.stringify(msg.error))) : resolve(msg.result);
+        msg.error
+          ? reject(new Error(JSON.stringify(msg.error)))
+          : resolve(msg.result);
       } else if (msg.method) {
         this.events.push(msg);
       }
@@ -137,7 +137,9 @@ class CDP {
       userGesture: true,
     });
     if (res.exceptionDetails) {
-      throw new Error(`eval exception: ${  JSON.stringify(res.exceptionDetails)}`);
+      throw new Error(
+        `eval exception: ${JSON.stringify(res.exceptionDetails)}`,
+      );
     }
     return res.result.value;
   }
@@ -157,20 +159,46 @@ class CDP {
   }
   async click(x, y) {
     const base = { x, y, button: "left", clickCount: 1 };
-    await this.send("Input.dispatchMouseEvent", { type: "mousePressed", ...base });
-    await this.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...base });
+    await this.send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      ...base,
+    });
+    await this.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      ...base,
+    });
   }
   // Press-drag-release with the left button held (buttons:1) through intermediate
   // moves — needed for Excalidraw to register a pointer drag (move an element).
   async drag(x1, y1, x2, y2, steps = 8) {
-    await this.send("Input.dispatchMouseEvent", { type: "mousePressed", x: x1, y: y1, button: "left", buttons: 1, clickCount: 1 });
+    await this.send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: x1,
+      y: y1,
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+    });
     for (let i = 1; i <= steps; i++) {
       const x = x1 + ((x2 - x1) * i) / steps;
       const y = y1 + ((y2 - y1) * i) / steps;
-      await this.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1 });
+      await this.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x,
+        y,
+        button: "left",
+        buttons: 1,
+      });
       await sleep(25);
     }
-    await this.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: x2, y: y2, button: "left", buttons: 1, clickCount: 1 });
+    await this.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: x2,
+      y: y2,
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+    });
   }
 }
 
@@ -180,7 +208,9 @@ async function connect() {
     try {
       const res = await fetch(`http://127.0.0.1:${PORT}/json/list`);
       const targets = await res.json();
-      const page = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+      const page = targets.find(
+        (t) => t.type === "page" && t.webSocketDebuggerUrl,
+      );
       if (page) {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await new Promise((resolve, reject) => {
@@ -269,13 +299,45 @@ async function launchA(dir) {
     cdp = await connect();
     await waitEditor(cdp);
 
+    // STRL: the app correctly defaults to DARK, but Excalidraw renders dark mode
+    // via a render-time canvas filter (DARK_THEME_FILTER in renderElement.ts),
+    // which inverts the raw pixels getImageData() reads — so the literal
+    // marker-color assertions below only hold in LIGHT theme. Pin light via the
+    // app's own toggle (Alt+Shift+D; it boots dark) and confirm it took. (Before
+    // the desktop theme-preserve fix, opening a file buggily flipped to light,
+    // which is what made these literal-color samples pass by accident.)
+    await cdp.tap("D", "KeyD", 68, 9); // Alt(1)+Shift(8)
+    const light = await until(
+      cdp,
+      "(() => { const e = document.querySelector('.excalidraw'); return e ? !e.classList.contains('theme--dark') : false; })()",
+      (v) => v === true,
+      4000,
+    );
+    if (!light.ok) {
+      throw new Error("could not switch to light theme for color sampling");
+    }
+
     // The opened scene should render cyan.
-    const cyan0 = await until(cdp, countColorExpr(0, 255, 255), (v) => v.hits > 100, 8000);
-    record("open file renders on canvas", cyan0.ok, `cyan hits=${JSON.stringify(cyan0.value)}`);
+    const cyan0 = await until(
+      cdp,
+      countColorExpr(0, 255, 255),
+      (v) => v.hits > 100,
+      8000,
+    );
+    record(
+      "open file renders on canvas",
+      cyan0.ok,
+      `cyan hits=${JSON.stringify(cyan0.value)}`,
+    );
 
     // 1) Live-reload clean: external atomic rewrite to magenta → canvas updates.
     atomicWrite(file, sceneWith("#ff00ff", "rect-magenta"));
-    const magenta = await until(cdp, countColorExpr(255, 0, 255), (v) => v.hits > 100, 6000);
+    const magenta = await until(
+      cdp,
+      countColorExpr(255, 0, 255),
+      (v) => v.hits > 100,
+      6000,
+    );
     const cyanGone = await cdp.evaluate(countColorExpr(0, 255, 255));
     record(
       "live-reload (clean) reflects external change",
@@ -316,7 +378,9 @@ async function launchA(dir) {
     // never written. (Pre-fix, this overwrote the sentinel with 'PWNED-STRL'.)
     const sentinel = path.join(dir, "sentinel.secret");
     fs.writeFileSync(sentinel, "SENTINEL");
-    await cdp.evaluate(`window.strlDesktop.confirmOpened(${JSON.stringify(sentinel)})`);
+    await cdp.evaluate(
+      `window.strlDesktop.confirmOpened(${JSON.stringify(sentinel)})`,
+    );
     await sleep(400);
     await cdp.evaluate(
       `window.strlDesktop.saveFile({data:'PWNED-STRL',suggestedName:'x',extension:'excalidraw',saveAs:false})`,
@@ -328,10 +392,15 @@ async function launchA(dir) {
       sentinelAfter === "SENTINEL",
       sentinelAfter === "SENTINEL"
         ? "sentinel intact (exploit blocked)"
-        : `SENTINEL OVERWRITTEN -> ${JSON.stringify(sentinelAfter.slice(0, 24))}`,
+        : `SENTINEL OVERWRITTEN -> ${JSON.stringify(
+            sentinelAfter.slice(0, 24),
+          )}`,
     );
   } finally {
-    if (cdp) try { cdp.ws.close(); } catch {}
+    if (cdp)
+      try {
+        cdp.ws.close();
+      } catch {}
     kill(proc);
     await sleep(800);
   }
@@ -365,7 +434,11 @@ async function launchB(dir) {
       (v) => typeof v === "string" && /removed on disk/i.test(v),
       6000,
     );
-    record("external-removed surfaces recover toast", toast.ok, toast.ok ? "toast shown" : "no toast");
+    record(
+      "external-removed surfaces recover toast",
+      toast.ok,
+      toast.ok ? "toast shown" : "no toast",
+    );
 
     // 4a) CSP blocks a foreign origin by default.
     const fetchExpr = `(async()=>{try{const r=await fetch('${CSP_ORIGIN}/ping',{cache:'no-store'});return 'OK:'+r.status;}catch(e){return 'ERR:'+(e&&e.message);}})()`;
@@ -384,7 +457,12 @@ async function launchB(dir) {
     await sleep(2500); // window reload
     await waitEditor(cdp);
     const hitsBefore2 = serverHits;
-    const allowed = await until(cdp, fetchExpr, (v) => v.startsWith("OK"), 6000);
+    const allowed = await until(
+      cdp,
+      fetchExpr,
+      (v) => v.startsWith("OK"),
+      6000,
+    );
     await sleep(300);
     const reachedWhenAllowed = serverHits > hitsBefore2;
     record(
@@ -397,7 +475,10 @@ async function launchB(dir) {
     await cdp.evaluate("window.strlDesktop.setAiOrigins([])");
     await sleep(1000);
   } finally {
-    if (cdp) try { cdp.ws.close(); } catch {}
+    if (cdp)
+      try {
+        cdp.ws.close();
+      } catch {}
     kill(proc);
     server.close();
     await sleep(500);
@@ -406,7 +487,9 @@ async function launchB(dir) {
 
 async function main() {
   if (!fs.existsSync(BIN)) {
-    console.error(`missing packaged binary: ${BIN}\nrun: pnpm dist:linux (or electron-builder --linux AppImage)`);
+    console.error(
+      `missing packaged binary: ${BIN}\nrun: pnpm dist:linux (or electron-builder --linux AppImage)`,
+    );
     process.exit(2);
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strl-cdp-"));
@@ -418,14 +501,19 @@ async function main() {
     // preserve electron logs for diagnosis, then clean the scene workdir
     for (const f of ["appA.log", "appB.log"]) {
       try {
-        fs.copyFileSync(path.join(dir, f), path.join(os.tmpdir(), `strl-cdp-${f}`));
+        fs.copyFileSync(
+          path.join(dir, f),
+          path.join(os.tmpdir(), `strl-cdp-${f}`),
+        );
       } catch {}
     }
     fs.rmSync(dir, { recursive: true, force: true });
   }
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n[cdp] ${passed}/${results.length} checks passed`);
-  console.log(JSON.stringify({ ok: passed === results.length, results }, null, 2));
+  console.log(
+    JSON.stringify({ ok: passed === results.length, results }, null, 2),
+  );
   process.exit(passed === results.length ? 0 : 1);
 }
 
