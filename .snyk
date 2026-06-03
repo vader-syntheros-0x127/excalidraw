@@ -19,10 +19,16 @@ ignore:
           is abandoned at 1.0.6 with no fixed release. Clears when electron
           -builder adopts @electron/asar@4 / a glob@9+ rimraf internally.
         expires: 2026-12-02T00:00:00.000Z
-# STRL: exclude the loopback AI-endpoint mock servers from SAST. They are test
-# fixtures (not shipped, not prod code) that bind plain HTTP on 127.0.0.1 by
-# design; "HTTP instead of HTTPS" (CWE-319) does not apply to a localhost mock.
+# STRL: exclude plaintext-HTTP-by-design code from SAST (CWE-319 HttpToHttps).
+#  - byo-*-smoke.mjs: loopback AI-endpoint mock servers — test fixtures, not
+#    shipped/prod, bind plain HTTP on 127.0.0.1.
+#  - strl-mcp-server/src/httpListener.ts: a 3-line wrapper holding the single
+#    http.createServer call for the MCP network transport. The transport is
+#    cleartext by design (internal-LAN dev tool, fails closed without a bearer
+#    token, fronted by TLS/SSH-tunnel on untrusted nets). Only this wrapper is
+#    excluded — bin.ts's auth + session routing stays fully under SAST.
 exclude:
   code:
     - excalidraw-app/byo-image-smoke.mjs
     - excalidraw-app/byo-stream-smoke.mjs
+    - packages/strl-mcp-server/src/httpListener.ts

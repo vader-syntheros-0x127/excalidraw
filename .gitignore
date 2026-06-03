@@ -34,3 +34,7 @@ desktop/dist-installers
 
 # STRL: local MCP diagram workdir (generated .excalidraw scratch)
 /diagrams/
+
+# STRL: host-side LAN serve config (contains a bearer token) + pidfile
+/.strl-serve.env
+/.strl-serve.pids

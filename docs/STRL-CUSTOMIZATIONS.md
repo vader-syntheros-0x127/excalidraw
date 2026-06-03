@@ -1009,6 +1009,7 @@ Standalone stdio MCP server (low-level `@modelcontextprotocol/sdk@1.29.0`, JSON-
 - **Sandbox:** every target resolved under `STRL_MCP_WORKDIR` with a path-traversal guard (`path.relative` → reject `..`/absolute) + `.excalidraw` ext + 50 MB cap. Writes are **atomic** (temp + `fs.rename`) so a watcher only ever sees a whole file.
 - **Env:** `STRL_MCP_WORKDIR` (required sandbox root), `STRL_MCP_ACTIVE_FILE` (default target), `STRL_MCP_IMAGE_ENDPOINT`/`_MODEL`/`_KEY`/`_SIZE` (opt-in image gen; absent ⇒ `generate_image` returns disabled — **no default endpoint, no phone-home**).
 - **Run** (register in a client's `mcpServers`): `{ "command": "node", "args": ["/abs/.../packages/strl-mcp-server/dist/bin.js"], "env": { "STRL_MCP_WORKDIR": "/abs/sketches", "STRL_MCP_ACTIVE_FILE": "scene.excalidraw" } }`.
+- **Network mode:** `STRL_MCP_TRANSPORT=http` exposes the same tools over Streamable HTTP so **remote** machines can connect as clients (auth + bind hardening) — see **§13.11**.
 - Verify: `node mcp-smoke.mjs` (drives the bin over real JSON-RPC stdio: 7 tools, create/edit/add_image, path-traversal rejected, on-disk file valid).
 
 **Build/typecheck note:** both Node packages are **excluded from the root `tsc`** (`tsconfig.json` `exclude`) because they use node built-ins; each has its own `tsconfig.json` (`types:["node"]` + `@excalidraw/*` paths + a `global.d.ts` mirroring `@excalidraw/excalidraw/global` + `/css`). The engine emits no published `dist` to git (gitignored); build with `node build.mjs` before running.
@@ -1112,6 +1113,36 @@ This took the tree from **63 → 0** Snyk findings (commit `6cabed28`).
 - **Snyk Code (SAST) → 0.** Six real fixes + two scoped ignores. **(real)** the five `postMessage("*")` sites in the upstream `App.tsx` YouTube/Vimeo embed code now target the embed's own origin — `new URL(iframe.src).origin` for the control messages (covers `youtube-nocookie.com`), `event.origin` for the validated Vimeo reply — closing CWE-942. `data/blob.ts` `generateIdFromFile` SHA-1→**SHA-256** (CWE-916; content-addressing only, but SHA-256 is free via WebCrypto and existing scenes are unaffected — file ids are persisted, never recomputed). **(ignored)** the two loopback AI-mock servers in `byo-*-smoke.mjs` (CWE-319 HTTP-not-HTTPS) are test fixtures, excluded via `.snyk` `exclude.code` (an inline `// deepcode ignore` is also present as in-code rationale, but the local CLI honors the `.snyk` exclude).
 - **Web Content-Security-Policy — added, and the web build now self-hosts fonts (no phone-home).** Two layers: a **web-only `<meta>` CSP** in `index.html` (gated `VITE_APP_DESKTOP != 'true'`, so it never double-stacks with the desktop session CSP) as in-document defense-in-depth, and the **authoritative HTTP-header CSP in `/public/_headers`** (the strong directives a meta tag can't carry — `frame-ancestors 'none'`, HSTS, `X-Frame-Options`, `Referrer-Policy: no-referrer`, `Permissions-Policy`; also dropped upstream's blanket `Access-Control-Allow-Origin: *`). Tightening the CSP exposed that the **web build was loading every editor font from Excalidraw's DigitalOcean CDN + an `esm.sh` fallback** — a phone-home the desktop build already avoided. Fixed at the source so the strict `font-src 'self'` holds: `scripts/woff2/woff2-vite-plugins.js` now emits `EXCALIDRAW_ASSET_PATH = window.origin` + local `/fonts/...` preloads for the **web** build too (all font families are already bundled), and `fonts/ExcalidrawFontFace.ts` **removes the `esm.sh` remote fallback for the whole fork** (`ASSETS_FALLBACK_URL = ""`; it was only stripped for desktop before). **Verified with real headless Chrome** against the served build: **0 CSP violations**, editor mounts, fonts fetched from `self` (`/fonts/...`, `/Assistant-Regular.woff2`) — no CDN/esm.sh/gstatic. The now-vestigial Google-fonts preconnect was removed. **(Note:** these touch the higher-merge-risk library files `ExcalidrawFontFace.ts` + `woff2-vite-plugins.js` — see §1's merge-risk map; the resolution on conflict stays "keep STRL's self-hosting.")
 - **Full gate green:** Snyk SCA = 3 (MPL licenses only; `inflight` removed/ignored, no new from asar@4) · Snyk Code = 0 · typecheck 0 · 4 node smokes · vitest (math/image/flip 73 passed) · web build + Chrome CSP check · AppImage + boot + **CDP 7/7** · eslint/prettier green.
+
+### 13.11 Network MCP transport + LAN serving (2026-06-03)
+
+Goal: keep the web app running on this host **and** let other dev machines drive STRL-Ideate via MCP. Implemented the **centralized** model — one MCP server on this host, remote harnesses connect as clients.
+
+**`bin.ts` — dual transport (stdio default + opt-in Streamable HTTP).** `STRL_MCP_TRANSPORT=http` (or setting any `STRL_MCP_HTTP_PORT`) starts a `node:http` listener wrapping the SDK's `StreamableHTTPServerTransport` — the SDK 1.29.0 already ships it, so **no new dependency**. One transport per MCP session (sessionId map; `POST`=messages, `GET`=server→client SSE, `DELETE`=terminate). stdio stays the default for local registration. Hardening:
+
+- **Fail-closed:** refuses to bind a non-loopback host without `STRL_MCP_HTTP_TOKEN`.
+- **Bearer auth** on every request when a token is set (no-token → **401**, verified live).
+- **DNS-rebinding guard** (`enableDnsRebindingProtection` + `STRL_MCP_HTTP_ALLOWED_HOSTS`).
+- 16 MB body cap; requests scoped to `STRL_MCP_HTTP_PATH` (default `/mcp`).
+- Env: `STRL_MCP_HTTP_HOST` (default `127.0.0.1`; `0.0.0.0` for LAN), `_PORT` (7337), `_PATH` (`/mcp`), `_TOKEN`, `_ALLOWED_HOSTS`.
+- **Cleartext caveat:** plain HTTP — token + payloads travel in clear on the LAN. For untrusted networks front with TLS (reverse proxy) or an SSH tunnel.
+
+The single unavoidable `http.createServer` call is isolated in **`src/httpListener.ts`** (3 lines) so **only that file** is excluded from SAST (CWE-319 HttpToHttps, `.snyk` `exclude.code`) — `bin.ts`'s auth + session routing stays fully scanned.
+
+**Host-side serving.** `.strl-serve.env` (gitignored — holds the bearer token; `.strl-serve.env.example` is the committed template) + **`scripts/strl-serve.sh`** start both services: the MCP HTTP server and a static `http-server` of `excalidraw-app/build` on the LAN. `scripts/strl-serve.sh stop` tears them down (PIDs in `.strl-serve.pids`).
+
+**Remote-machine registration** (run on each dev box, in its own Claude Code / harness):
+
+```bash
+claude mcp add --transport http strl-ideate http://<HOST_LAN_IP>:7337/mcp \
+  --header "Authorization: Bearer <token from .strl-serve.env>"
+```
+
+Then ask that agent to draw — diagrams land in **this host's** shared `diagrams/` workdir.
+
+**Coupling note:** the MCP server writes `.excalidraw` files; the web app loads from localStorage / file-import. They are **not** live-linked over the network — a remote MCP edit updates a _file_, the running web tab does not auto-refresh (the desktop app's `fs.watch` live-reload, §13.4, is local-only). Open/refresh the file to view a remote agent's drawing.
+
+**Verified:** Snyk SCA baseline unchanged + Snyk Code **0** (wrapper excluded) · typecheck 0 · eslint/prettier green · stdio regression (server `strl-ideate`, 7 tools) · HTTP smoke (401 negative path + authed `create_scene` → 6 elements + `get_scene`) · **live LAN** check over `192.168.12.222` (web `200`, MCP `401` without token, authed `tools/list` = 7).
 
 ### 13.10 Held / deferred (AI)
 
