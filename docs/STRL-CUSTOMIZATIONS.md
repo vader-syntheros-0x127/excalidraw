@@ -596,7 +596,7 @@ Build commands (`desktop/package.json`, run from `desktop/`):
 - Dev: `pnpm start` (build main + `electron .`, loads packaged renderer over `app://`) or `pnpm start:dev` (sets `STRL_DESKTOP_DEV_URL=http://localhost:3000`, loads the live Vite dev server + opens DevTools).
 - Output → `desktop/dist-installers`.
 
-**Cross-build constraints:** Linux can build linux. Windows builds need a `windows-latest` runner (cross-build on Linux needs wine for rcedit icon/version stamping). macOS dmg can only be built on macOS (`hdiutil`/`dmgbuild`). CI (`.github/workflows/desktop-build.yml`) is a **manual-dispatch** (`workflow_dispatch`) matrix over ubuntu/windows/macos producing installer **artifacts only** (`permissions: contents: read`, no publish/release). corepack pins pnpm 10.34.1 **before** setup-node; Node 22; `pnpm install --frozen-lockfile` (electron's postinstall runs via `pnpm.onlyBuiltDependencies`, no rebuild step); per-OS electron-builder binary cache; SHA-256 sidecars emitted per installer; actions are SHA-pinned.
+**Cross-build constraints:** Linux builds Linux **and Windows** — the Windows NSIS + portable installers cross-build on this Linux host via **Wine 9.0** (electron-builder uses wine for rcedit icon/version stamping; the v0.2.1 Windows installers were in fact Wine-built on Linux this session). Only the macOS dmg truly needs macOS (`hdiutil`/`dmgbuild`). CI (`.github/workflows/desktop-build.yml`) is a **manual-dispatch** (`workflow_dispatch`) matrix over ubuntu/windows/macos producing installer **artifacts only** (`permissions: contents: read`, no publish/release). corepack pins pnpm 10.34.1 **before** setup-node; Node 22; `pnpm install --frozen-lockfile` (electron's postinstall runs via `pnpm.onlyBuiltDependencies`, no rebuild step); per-OS electron-builder binary cache; SHA-256 sidecars emitted per installer; actions are SHA-pinned.
 
 macOS entitlements (`assets/entitlements.mac.plist`): minimal hardened-runtime set — `allow-jit`, `allow-unsigned-executable-memory`, `disable-library-validation` (for Electron/V8). **Deliberately NO `app-sandbox`** — sandboxing would break the native open/save dialogs for local `.excalidraw` files. Lives in `assets/` (buildResources) because the repo gitignores `build/`.
 
@@ -633,19 +633,13 @@ The STRL fork's security posture: the strict desktop CSP, the "no phone-home" lo
 
 Relevant commits: `b3d91766` (CSP + local fonts), `ee0001cd` (path-traversal hardening), `90dc3980` (debrand / neutralize web SEO / drop external links), `504f36e5` (drop misleading E2E shield), `36e9d541` (supply-chain CI), `e993f64d` (yarn→pnpm + emptied backend env).
 
-### 7.1 The three inline-script sha256 hashes — VERIFIED
+### 7.1 Inline-script CSP hashes — derived at runtime
 
-The CSP (`desktop/src/main.ts:35–49`, full policy in §6.2) is injected **only onto the HTML document** served over `app://` (`main.ts:171–178`); sub-resources stream through and inherit it (`main.ts:167–170`). The dev path (Vite via `STRL_DESKTOP_DEV_URL`) is untouched.
+The CSP (`desktop/src/main.ts` `buildCSP`, full policy in §6.2) is injected **only onto the HTML document** served over `app://` (`main.ts` `registerAppProtocol`); sub-resources stream through and inherit it. The dev path (Vite via `STRL_DESKTOP_DEV_URL`) is untouched.
 
-The three hashes correspond to the three inline `<script>` blocks in the **built** (vite-transformed, minified) desktop renderer `index.html`, **NOT** the source `excalidraw-app/index.html`. Recomputing sha256(script body)→base64 against `desktop/renderer/index.html` matches all three exactly:
+`script-src` is **hash-pinned, but the hashes are computed at runtime** — `getInlineScriptHashes()` reads the **built** desktop renderer `index.html`, extracts each inline `<script>` body (dark-mode early-paint, the `EXCALIDRAW_ASSET_PATH = window.origin` asset-path setter, and `window.name`) and sha256s it. There is **no hard-coded hash list to drift**: editing an inline script can never leave a stale literal that silently blocks it (§6.2/§6.13) — the served file is re-hashed. It stays strict — a script _injected at runtime_ (not in the served file) is not in the hash set, so it's blocked.
 
-| CSP slot | hash | inline script |
-| --- | --- | --- |
-| 1 | `iPtxE0n242JUcLKPr7D09tSIF4FKNSy5jqkeySXxfDY=` | dark-mode early-paint (`try { setTheme(getTheme()) }`) — source `excalidraw-app/index.html:55–90` |
-| 2 | `mXvmZWZG6iAZBw0OliHQaJOSMPc9DbQZJaxywImBlQo=` | local asset-path (`window.EXCALIDRAW_ASSET_PATH = window.origin`) — **injected by the woff2 desktop branch**, `scripts/woff2/woff2-vite-plugins.js:67–74` |
-| 3 | `Kxm9zQ99NqYtDuNSdByEfyFAYVPAqWdmNFx5axumk1w=` | `window.name = "_excalidraw"` — source `excalidraw-app/index.html:151–154` |
-
-**MAINTENANCE GOTCHA (load-bearing):** these hashes are over the **post-build minified** bodies, so they will silently drift if anyone (a) edits those three inline scripts, (b) changes the woff2 desktop-font injection text, or (c) changes the minifier. The **source-file hashes do NOT match the CSP.** To recompute, build the desktop renderer and hash the inline `<script>` bodies of `desktop/renderer/index.html` (base64 of sha256). The `main.ts:34` comment points at this. The safety net is the `STRL_SMOKE=1` probe (§6.12), which asserts `dark:true`/`hasEditor:true`; a hash mismatch blocks the inline scripts and fails the editor mount.
+> **History:** these were three hard-coded `sha256-…` literals until 2026-06-03. A comment edit to the asset-path script changed its body hash, the literal in `main.ts` was never updated, and the strict CSP silently blocked the script — disabling canvas fonts on desktop (§6.13). Runtime derivation removed that failure mode, and the `STRL_SMOKE=1` probe (§6.12) now also asserts `assetPath:true` (the asset-path script executed), so a regression of this class fails the boot smoke instead of slipping through.
 
 ### 7.2 Renderer / app:// hardening (defense in depth around the CSP)
 
@@ -799,13 +793,13 @@ Every customized/added file across all areas. **Type:** `added-strl` (net-new ST
 ### `desktop/` (NEW Electron workspace — zero merge risk)
 
 | Path | What STRL changed | Type | Merge-risk |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- |
 | `desktop/src/main.ts` | Electron main: `app://` privileged protocol (streaming `net.fetch`, `path.relative` traversal guard, SPA fallback, CSP-on-document), window/state, native menu, document model (activeFilePath/dirty/recents/title/autosave/Save-vs-Save-As), close/new save round-trip, full `strl:*` IPC, single-instance, navigation hardening, `.excalidraw`+regular-file+50 MB file-open guard | added-strl | Zero |
 | `desktop/src/preload.ts` | `contextBridge` typed `window.strlDesktop` API over every `strl:*` channel; `contextIsolation`+`sandbox` on; no Node internals leak | added-strl | Zero |
 | `desktop/electron-builder.yml` | Packaging: `appId com.strl.ideate`, `asar:true`, `fileAssociations(.excalidraw)`, linux AppImage+deb, win nsis+portable, mac dmg x64/arm64 hardenedRuntime; signing/notarize HELD | added-strl | Zero |
 | `desktop/assets/entitlements.mac.plist` | Minimal hardened-runtime entitlements (`allow-jit`/`unsigned-exec-mem`/`disable-library-validation`); NO `app-sandbox` so native file dialogs work | added-strl | Zero |
 | `desktop/assets/icon.png` | STRL mark (512×512); electron-builder derives `.ico`/`.icns`; byte-identical to `android-chrome-512x512.png` | added-strl | Zero |
-| `desktop/package.json` | Electron 42.3.0 + electron-builder 26.8.1; `build:main`/`build:renderer`/`prepackage`/`dist:linux | win | mac`/`start`/`start:dev`; name `strl-ideate-desktop`; de-leaked description | added-strl | Zero |
+| `desktop/package.json` | v0.2.1; Electron 42.3.0 + electron-builder 26.11.1; `build:main`/`build:renderer`/`prepackage`/`dist:linux`/`dist:win`/`dist:mac`/`start`/`start:dev`; name `strl-ideate-desktop`; de-leaked description | added-strl | Zero |
 | `desktop/tsconfig.json` | Separate `tsc` config for main/preload (`module node16`, ES2022, strict, `types:[node]`, no DOM) — NOT covered by root typecheck | added-strl | Zero |
 | `desktop/renderer/index.html` | Built desktop renderer; its 3 minified inline scripts are the source of the verified CSP hashes (build artifact) | added-strl | Zero |
 
@@ -895,7 +889,7 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 | Target | Runner | Notes |
 | --- | --- | --- |
 | Linux AppImage + deb | `ubuntu-latest` | native |
-| Windows NSIS + portable .exe | `windows-latest` | cross-build on Linux needs wine for rcedit |
+| Windows NSIS + portable .exe | Linux (via Wine 9.0) or `windows-latest` | wine does rcedit icon/version stamping; cross-built on Linux this session |
 | macOS dmg (x64 + arm64) | `macos-latest` | only buildable on macOS (`hdiutil`/`dmgbuild`) |
 
 ### Gotchas (read before building/typechecking)
@@ -944,14 +938,9 @@ Plus the **synchronous (non-IPC)** `window.__strlIsDirty` flag the close guard r
 
 `public/favicon.svg` is the single vector source of truth; **no generation script is committed.** Use the ImageMagick recipe in §4.3 to rasterize all favicons/PWA icons + the desktop icon. The `og-image.png` (1200×630) is composited separately (mark + wordmark + tagline), not a pure resize. **If the mark design changes, edit BOTH `favicon.svg` AND the two `<path d=…>` values in `packages/excalidraw/components/ExcalidrawLogo.tsx`** (independent copies of the same geometry), then refresh the `MobileMenu.test.tsx.snap` snapshot.
 
-### 12.3 Recompute the desktop CSP inline-script hashes
+### 12.3 Desktop CSP inline-script hashes (now automatic)
 
-The three `sha256-…` hashes in `desktop/src/main.ts:35–49` are over the **post-build minified** inline `<script>` bodies of `desktop/renderer/index.html` — **not** the source. They drift if you edit the three inline scripts (dark-mode early-paint, `EXCALIDRAW_ASSET_PATH`, `window.name`), change the woff2 desktop-font injection, or change the minifier. To recompute:
-
-1. Build the desktop renderer: `pnpm -C excalidraw-app build:desktop` and copy to `desktop/renderer` (or `pnpm -C desktop build:renderer`).
-2. For each inline `<script>` body in `desktop/renderer/index.html`, compute `base64(sha256(body))`.
-3. Replace the three `'sha256-…'` tokens in `main.ts`.
-4. Run `STRL_SMOKE=1` desktop; a mismatch blocks the inline scripts and fails the editor mount (`{"hasEditor":false}` or `dark:false`).
+**No manual step needed.** `desktop/src/main.ts` `getInlineScriptHashes()` derives the `script-src` hashes from the built `desktop/renderer/index.html` at runtime (§6.2 / §7.1), so editing an inline script, the woff2 desktop-font injection, or the minifier can no longer leave a stale hash. Just rebuild the renderer (`pnpm -C desktop build:renderer`) and restart. The `STRL_SMOKE=1` probe (§6.12) asserts `assetPath:true` + `hasEditor`/`dark` as the safety net. (Until 2026-06-03 these were three hard-coded literals recomputed by hand — that drift is what caused the §6.13 font regression.)
 
 ### 12.4 Add an export format
 
@@ -972,7 +961,7 @@ The three `sha256-…` hashes in `desktop/src/main.ts:35–49` are over the **po
 
 Releases are built **locally**, not via GitHub Actions. The desktop app uses its own version line (`desktop/package.json`), **separate** from the inherited upstream library tags (`v0.16`–`v0.18`).
 
-1. **Bump** `desktop/package.json` `version` (e.g. `0.2.0`) — drives the installer artifact names (`STRL-Ideate-<version>.AppImage`, etc.). Commit on master.
+1. **Bump** `desktop/package.json` `version` (current: `0.2.1`) — drives the installer artifact names (`STRL-Ideate-<version>.AppImage`, etc.). Commit on master.
 2. **Security gate first** (always, before building): Snyk SCA + Code (org `syntheros`) → green; hardened install path (§7).
 3. **Build** (Linux **and** Windows build on this Linux host; only macOS needs a Mac):
    - Linux: `pnpm -C desktop dist:linux` → `STRL-Ideate-<v>.AppImage` + `.deb`
@@ -1036,7 +1025,7 @@ Revives the surviving `TTDDialog` text-to-diagram pipeline as a local-first, bri
 - `excalidraw-app/data/aiSettings.ts` — localStorage config (endpoint, key, model, optional image endpoint/model). `isAiConfigured()` gates everything. On desktop, saving derives `new URL(endpoint).origin` and calls `strlDesktop.setAiOrigins()`.
 - `excalidraw-app/data/byoStreamFetch.ts` — **standard OpenAI** `chat/completions` SSE parser returning the `OnTextSubmitRetValue` contract. _(The library's `TTDStreamFetch` speaks a bespoke hosted-backend SSE shape and would silently fail — do NOT reuse it for BYO endpoints.)_ System prompt asks for ONLY a Mermaid diagram; ` ```mermaid ` fences stripped defensively.
 - `AIComponents.tsx` renders `<TTDDialog onTextSubmit persistenceAdapter={TTDIndexedDBAdapter}>`; `AISettingsDialog.tsx` is the config UI (Menu → **AI settings**, `brainIcon`). `App.tsx` renders both inside `<Excalidraw>` and passes `aiEnabled={isAiConfigured()}` (false hides the trigger/commands; the host `<TTDDialog>` supersedes LayerUI's `__fallback` via `withInternalFallback`).
-- **Desktop CSP is now settings-driven** (`main.ts` `buildCSP(aiOrigins)` replaced the const): default strict (`connect-src 'self' data: blob:`); when AI is enabled, ONLY the configured origin(s) are appended to `connect-src`/`img-src`. `strl:set-ai-origins` validates http(s) origins, persists them (`ai-origins.json` in userData), and reloads the window so the new document CSP applies (scene restores from localStorage). **The three inline-script sha256 hashes are unchanged** (§12.3 / STRL_SMOKE stays valid).
+- **Desktop CSP is now settings-driven** (`main.ts` `buildCSP(aiOrigins)` replaced the const): default strict (`connect-src 'self' data: blob:`); when AI is enabled, ONLY the configured origin(s) are appended to `connect-src`/`img-src`. `strl:set-ai-origins` validates http(s) origins, persists them (`ai-origins.json` in userData), and reloads the window so the new document CSP applies (scene restores from localStorage). **The CSP script hashes are derived at runtime** (§6.2 / §7.1), so they stay valid automatically; STRL_SMOKE stays valid.
 
 Verify: `pnpm test:typecheck` + `pnpm -C desktop build:main` + `pnpm -C excalidraw-app build`
 
