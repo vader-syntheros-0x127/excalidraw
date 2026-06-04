@@ -1135,7 +1135,10 @@ Goal: keep the web app running on this host **and** let other dev machines drive
 
 The single unavoidable `http.createServer` call is isolated in **`src/httpListener.ts`** (3 lines) so **only that file** is excluded from SAST (CWE-319 HttpToHttps, `.snyk` `exclude.code`) — `bin.ts`'s auth + session routing stays fully scanned.
 
-**Host-side serving.** `.strl-serve.env` (gitignored — holds the bearer token; `.strl-serve.env.example` is the committed template) + **`scripts/strl-serve.sh`** start both services: the MCP HTTP server and a static `http-server` of `excalidraw-app/build` on the LAN. `scripts/strl-serve.sh stop` tears them down (PIDs in `.strl-serve.pids`).
+**Host-side serving.** `.strl-serve.env` (gitignored — holds the bearer token; `.strl-serve.env.example` is the committed template) drives both: the MCP HTTP server and a static `http-server` of `excalidraw-app/build` on the LAN.
+
+- **Persistent (production on this host):** two **system-level** systemd services, `strl-mcp.service` + `strl-web.service` — source of truth in **`scripts/systemd/`** (units + `install.sh` + README), installed to `/etc/systemd/system/`, `enabled` (start at boot, no login), run as `User=sclmain` (not root), `Restart=on-failure`. Manage with `sudo systemctl {status,restart,stop} strl-mcp strl-web`. **They run prebuilt artifacts and do NOT auto-rebuild — restart after any rebuild** (mcp-server → `restart strl-mcp`; web `pnpm build` → `restart strl-web`; **desktop `dist:*` clobbers `excalidraw-app/build` with the desktop build → `pnpm build` then `restart strl-web`**). Full update matrix: `scripts/systemd/README.md`.
+- **One-off fallback:** `scripts/strl-serve.sh` (foreground, PIDs in `.strl-serve.pids`) — don't run it alongside the systemd services (port clash).
 
 **Remote-machine registration** (run on each dev box, in its own Claude Code / harness):
 

@@ -1,0 +1,21 @@
+[Unit]
+# STRL-Ideate static web preview (excalidraw-app/build) served on the LAN.
+# System-level unit. Adjust paths/User for another host. Install: scripts/systemd/install.sh
+Description=STRL-Ideate web preview (static excalidraw-app/build) on the LAN
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sclmain
+Group=sclmain
+WorkingDirectory=/home/sclmain/STRL/strl-excalidraw
+# http-server run directly (no npx/safe-chain wrapper, which isn't available to systemd)
+ExecStart=/usr/bin/node /home/sclmain/STRL/strl-excalidraw/node_modules/.bin/http-server /home/sclmain/STRL/strl-excalidraw/excalidraw-app/build -a 0.0.0.0 -p 8080 -c-1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

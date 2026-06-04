@@ -1,0 +1,27 @@
+[Unit]
+# STRL-Ideate centralized MCP server (Streamable HTTP) for LAN/remote agents.
+# System-level unit. Paths/User below are for this host (dm-acropolis-02); adjust
+# for another host. Install: scripts/systemd/install.sh
+Description=STRL-Ideate MCP server (Streamable HTTP) for LAN/remote agents
+Documentation=file:/home/sclmain/STRL/strl-excalidraw/docs/STRL-CUSTOMIZATIONS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Run as the repo owner, NOT root (the listener must not be privileged).
+User=sclmain
+Group=sclmain
+WorkingDirectory=/home/sclmain/STRL/strl-excalidraw
+# Token + bind + workdir come from the gitignored env file.
+EnvironmentFile=/home/sclmain/STRL/strl-excalidraw/.strl-serve.env
+ExecStart=/usr/bin/node /home/sclmain/STRL/strl-excalidraw/packages/strl-mcp-server/dist/bin.js
+Restart=on-failure
+RestartSec=3
+# light hardening that won't block writing scenes into diagrams/
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
