@@ -26,7 +26,8 @@ coverage
 dev-dist
 html
 meta*.json
-.claude
+.claude/*
+!.claude/skills/
 
 # STRL desktop build artifacts
 desktop/renderer
